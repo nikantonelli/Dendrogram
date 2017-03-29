@@ -2,12 +2,6 @@ My Inventory
 =========================
 
 ## Overview
+This app will look in the current project context for portfolio items. It will then attempt to show a dendogram style tree of the ancestral tree.
 
-
-## License
-
-My Inventory is released under the MIT license.  See the file [LICENSE](./LICENSE) for the full text.
-
-##Documentation for SDK
-
-You can find the documentation on our help [site.](https://help.rallydev.com/apps/2.1/doc/)
+The advanced filters are available to select the items of the type chosen in the 'starting' level of portfolio item.
