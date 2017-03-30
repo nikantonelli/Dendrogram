@@ -17,3 +17,5 @@ _SpecRunner.html
 *.yml
 
 test/AppSpec.js
+
+App.orig.js
