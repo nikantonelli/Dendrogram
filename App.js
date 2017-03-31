@@ -2,6 +2,10 @@ Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
     itemId: 'rallyApp',
+    statics: {
+        MIN_COLUMN_WIDTH:   300,        //Looks silly on less than this
+        MIN_ROW_HEIGHT: 20                  //A cards minimum height is 80, so add a bit
+    },
     items: [
         {
             xtype: 'container',
@@ -33,27 +37,35 @@ Ext.define('CustomApp', {
         //Get all the nodes and the "Unknown" parent virtual nodes
         gApp._nodes = gApp._nodes.concat(gApp._createMyNodes());
         var nodetree = gApp._createTree(gApp._nodes);
-        //It is hard to calculate the exact size of the tree so we will guess here at 20
+
+        //It is hard to calculate the exact size of the tree so we will guess here
         //When we try to use a 'card' we will need the size of the card
-        treeboxHeight = (nodetree.leaves().length * 20) + 20;
+
+        var numColumns = (gApp._highestOrdinal()+1); //Leave extras for offset at left and text at right
+        var columnWidth = this.getSize().width/numColumns;
+        columnWidth = columnWidth > this.self.MIN_COLUMN_WIDTH ? columnWidth : this.self.MIN_COLUMN_WIDTH;
+        treeboxHeight = nodetree.leaves().length * this.self.MIN_ROW_HEIGHT;
+
+        var viewBoxSize = [columnWidth*numColumns, treeboxHeight];
+
         //Make surface the size available in the viewport (minus the selectors and margins)
         var rs = this.down('#rootSurface');
-        rs.getEl().setWidth(this.getSize().width);
-        rs.getEl().setHeight(treeboxHeight);
+        rs.getEl().setWidth(viewBoxSize[0]);
+        rs.getEl().setHeight(viewBoxSize[1]);
         //Set the svg area to the surface
         this._setSVGSize(rs);
         // Set the dimensions in svg to match
-        var viewBoxSize = [this.getSize().width, treeboxHeight];
         var svg = d3.select('svg');
         svg.attr('class', 'rootSurface');
         svg.attr('preserveAspectRatio', 'none');
         svg.attr('viewBox', '0 0 ' + viewBoxSize[0] + ' ' + viewBoxSize[1]);
 
         gApp._nodeTree = nodetree;      //Save for later
-        g = svg.append("g")        .attr("transform","translate(60,0)");
+        g = svg.append("g")        .attr("transform","translate(10,0)");
+//        g = svg.append("g")        .attr("transform","translate(" + columnWidth + ",0)");
         //For the size, the tree is rotated 90degrees. Height is for top node to deepest child
         var tree = d3.tree()
-            .size([viewBoxSize[1], viewBoxSize[0]-300])     //Take off a chunk for the text
+            .size([viewBoxSize[1], viewBoxSize[0] - columnWidth])     //Take off a chunk for the text??
             .separation( function(a,b) {
                     return ( a.parent == b.parent ? 1 : 1); //All leaves equi-distant
                 }
@@ -81,27 +93,113 @@ Ext.define('CustomApp', {
             .data(nodetree.descendants())
             .enter().append("g")
             .attr("transform", function(d) { return "translate(" + d.y + "," + d.x + ")"; });
-        node.append(
-//        function(a,b,c,d,e,f) {
-//            gApp._createNodeElement(a,b,c,d,e,f);
-//            });
-        "circle")
+//        node.append(
+//            "rect")
+//                .attr("x", function(d) { return -25;})
+//                .attr("y", function(d) { return -15;})
+//                .attr("width", 50)
+//                .attr("height", 30)
+//                .attr("rx", 5)
+//                .attr("ry", 5)
+//                .attr("fill", "red")
+//                .attr("opacity", 0.5);
+        node.append("circle")
             .attr("r", 5)
             .attr("class", function (d) {
                 return d.data.error ? "error--node" : "no--errors";
-            });
+            })
+            .on("click", function(node, index, array) { gApp._nodePopOver(node,index,array)});
 
         node.append("text")
               .attr("dy", 3)
               .attr("visible", false)
               .attr("x", function(d) { return d.children ? -8 : 8; })
               .attr("y", function(d) { return d.children ? -8 : 0; })
-              .style("text-anchor", function(d) { return d.children ? d.parent ? "middle": "end" : "start"; })
+              .style("text-anchor", "start")
               .text(function(d) {  return d.children?d.data.Name : d.data.Name + ' ' + (d.data.record && d.data.record.data.Name); });
+
+//        var cards = g.selectAll("circle");
+
+//        node.html( function(node,index,array) {
+//
+//            if ( node.data.card) {  //We have a node to show
+//                debugger;
+//                var mySelection = array[index];
+//
+//                //Now drop all items on this node and add a new set
+//                var lastChild = mySelection.lastChild;
+//                while (lastChild){
+//                    previousChild = lastChild.previousSibling;
+//                    mySelection.remove(lastChild);
+//                    lastChild = previousChild;
+//                }
+//
+//                mySelection.append("circle")
+//                    .attr("r",15)
+//                    .attr("class", "error--node");
+//            }
+//            return '';
+//        });
+
     },
-    _createNodeElement: function(a,b,c,d,e,f) {
-        debugger;
-        var c = document.createElement("circle");
+    _nodePopOver: function(node,index,array) {
+
+        if (!(node.data.record.data.ObjectID)) return; //Only exists on real items
+        //Get ordinal (or something ) to indicate we are the lowest level, then use "UserStories" instead of "Children"
+        var field = node.data.record.data.Children? 'Children' : 'UserStories';
+        var model = node.data.record.data.Children? node.data.record.data.Children._type : 'UserStory';
+//        this.add({
+//            xtype: 'rallypopoverchilditemslistview',
+//            target: array[index],
+//            record: node.data.record,
+//            childField: field,
+//            gridConfig: {
+//                columnCfgs : [
+//                    'FormattedID',
+//                    'Name',
+//                    'Owner',
+//                    'Project',
+//                    'PercentDoneByStoryCount',
+//                    'PercentDoneByStoryPlanEstimate'
+//                ]
+//            },
+//            model: model
+//        });
+//
+//        Rally.ui.popover.PopoverFactory.bake({
+//            field: field,
+//            record: node.data.record,
+//            target: array[index]
+//        });
+
+        Ext.create('Rally.ui.dialog.Dialog', {
+            autoShow: true,
+            draggable: true,
+            closable: true,
+            width: 600,
+            title: 'Descendants of ' + node.data.record.get('FormattedID') + ': ' + node.data.record.get('Name'),
+            items: {
+                xtype: 'rallypopoverchilditemslistview',
+                target: array[index],
+                record: node.data.record,
+                childField: field,
+                addNewConfig: null,
+                gridConfig: {
+                    enableEditing: false,
+                    enableRanking: false,
+                    enableBulkEdit: false,
+                    showRowActionsClumn: false,
+                    columnCfgs : [
+                        'FormattedID',
+                        'Name',
+                        'Owner',
+                        'PercentDoneByStoryCount',
+                        'PercentDoneByStoryPlanEstimate'
+                    ]
+                },
+                model: model
+            }
+        });
     },
 
     //Entry point after creation of render box
@@ -120,6 +218,8 @@ Ext.define('CustomApp', {
                 {
                     xtype:  'rallyportfolioitemtypecombobox',
                     itemId: 'piType',
+                    fieldLabel: 'Choose Lowest Portfolio Type :',
+                    labelWidth: 100,
                     margin: '5 0 5 20',
 //                    valueField: 'Ordinal',
                     defaultSelectionPosition: 'first',
@@ -222,6 +322,7 @@ Ext.define('CustomApp', {
     _nodes: [],
     _filterPanel: false,
 
+    //We don't want the initial setup firing of the event
     _fireFilterPanelEvent: function() {
         if (!gApp._filterPanel) {
             gApp._filterPanel = true;
@@ -255,7 +356,7 @@ Ext.define('CustomApp', {
                 xtype: 'rallyinlinefiltercontrol',
                 itemId: 'filterPanel',
                 context: this.getContext(),
-                margin: '0 10 0 10',
+                margin: '5 0 0 60',
                 height: 26,
                 inlineFilterButtonConfig: {
                     stateful: true,
@@ -392,8 +493,9 @@ Ext.define('CustomApp', {
         var nodes = [];
         //Push them into an array we can reconfigure
         _.each(data, function(record) {
+            var card = Ext.create('Rally.ui.cardboard.Card', { record: record });
             var localNode = (gApp.getContext().getProjectRef() === record.get('Project')._ref);
-            nodes.push({'Name': record.get('FormattedID'), 'record': record, 'local': localNode});
+            nodes.push({'Name': record.get('FormattedID'), 'record': record, 'local': localNode, 'card': card});
         });
         return nodes;
     },
@@ -401,10 +503,11 @@ Ext.define('CustomApp', {
     _createMyNodes: function() {
         var nodes = [];
         //Create a node for d3 to hook onto
-        nodes.push({'Name': 'World',
+        nodes.push({'Name': 'World View',
             'record': {
                 'data': {
-                    '_ref': 'root'
+                    '_ref': 'root',
+                    'Name': 'World View'
                 }
             },
             'local':true
@@ -414,9 +517,8 @@ Ext.define('CustomApp', {
             nodes.push( { 'Name' : 'Unknown ' + typedef.Name,
                 'record': {
                     'data': {
-                            'type' : typedef.type,
                             'FormattedID' : 'Parent Not Set',
-                            'Name': 'For Stories Missing Parent',
+                            'Name': 'Missing Parent (' + typedef.Name + ')',
                             '_ref': '/' + typedef.type + '/null',
                             '_type': typedef.type,
                             'Parent': null
