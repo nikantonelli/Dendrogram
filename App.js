@@ -4,7 +4,8 @@ Ext.define('CustomApp', {
     itemId: 'rallyApp',
     statics: {
         MIN_COLUMN_WIDTH:   300,        //Looks silly on less than this
-        MIN_ROW_HEIGHT: 20                  //A cards minimum height is 80, so add a bit
+        MIN_ROW_HEIGHT: 20 ,                 //A cards minimum height is 80, so add a bit
+        LOAD_STORE_MAX_RECORDS: 700 //Unless I fix the use of 'OR'ed filters, this is the max 
     },
     items: [
         {
@@ -409,11 +410,12 @@ Ext.define('CustomApp', {
             }
         }
     },
+
     _loadStoreLocal: function(modelName) {
         var loadPromise = [];
         var storeConfig =
             {
-                pageSize: 700,    //We will make use of the batchproxy on big transfers
+                pageSize: this.self.LOAD_STORE_MAX_RECORDS,    //We will make use of the batchproxy on big transfers
                 model: modelName,
                 fetch:  ['Name', 'FormattedID', 'Parent', 'DragAndDropRank', 'Children', 'ObjectID', 'Project']
             };
@@ -430,7 +432,7 @@ Ext.define('CustomApp', {
         var loadPromise = [];
         var config = {
             model: modelName,
-            pageSize: 700,
+            pageSize: this.self.LOAD_STORE_MAX_RECORDS,
             context: {
                 workspace: gApp.getContext().getWorkspaceRef(),
                 project: null
