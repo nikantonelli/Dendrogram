@@ -131,9 +131,7 @@ Ext.define('CustomApp', {
             closable: true,
             width: 600,
             title: 'Descendants of ' + node.data.record.get('FormattedID') + ': ' + node.data.record.get('Name'),
-            items: [{
-                    xtype: ''
-                },
+            items: [
                 {
                 xtype: 'rallypopoverchilditemslistview',
                 target: array[index],
