@@ -5,7 +5,7 @@ Ext.define('CustomApp', {
     statics: {
         MIN_COLUMN_WIDTH:   300,        //Looks silly on less than this
         MIN_ROW_HEIGHT: 20 ,                 //A cards minimum height is 80, so add a bit
-        LOAD_STORE_MAX_RECORDS: 700 //Unless I fix the use of 'OR'ed filters, this is the max 
+        LOAD_STORE_MAX_RECORDS: 500 //Unless I fix the use of 'OR'ed filters, this is the max
     },
     items: [
         {
@@ -354,11 +354,16 @@ Ext.define('CustomApp', {
             gApp._nodeTree = null;
         }
         //Starting with lowest selected by the combobox, go up
+        var a = gApp.self.LOAD_STORE_MAX_RECORDS;
         var typeRecord = ptype.getRecord();
         var modelNumber = typeRecord.get('Ordinal');
         var typeRecords = ptype.store.getRecords();
         gApp._loadStoreLocal( typeRecords[modelNumber].get('TypePath')).then({
             success: function(dataArray) {
+                b =gApp.self.LOAD_STORE_MAX_RECORDS;
+                if (dataArray[0].length >= b) {
+                    Rally.ui.notify.Notifier.showWarning({message: 'Maximum limit of records reached: ' + b});
+                }
                 //Start the recursive trawl upwards through the levels
                 gApp._loadParents(dataArray, modelNumber);
             },

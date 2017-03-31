@@ -6,7 +6,7 @@
     "javascript": [
         "App.js",
         "d3.js",
-	"Proxy/BatchProxy.js"
+        "Proxy/BatchProxy.js"
     ],
     "css": [
         "app.css"
