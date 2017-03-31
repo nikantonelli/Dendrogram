@@ -6,4 +6,4 @@ This app will look in the current project context for portfolio items. It will t
 
 The advanced filters are available to select the items of the type chosen in the 'starting' level of portfolio item.
 
-![alt text](https://github.com/nikantonelli/Dendogram/blob/master/Images/overview.png)
+![alt text](https://github.com/nikantonelli/Dendrogram/blob/master/Images/overview.png)
