@@ -44,7 +44,7 @@ Ext.define('CustomApp', {
         var numColumns = (gApp._highestOrdinal()+1); //Leave extras for offset at left and text at right
         var columnWidth = this.getSize().width/numColumns;
         columnWidth = columnWidth > this.self.MIN_COLUMN_WIDTH ? columnWidth : this.self.MIN_COLUMN_WIDTH;
-        treeboxHeight = nodetree.leaves().length * this.self.MIN_ROW_HEIGHT;
+        treeboxHeight = (nodetree.leaves().length +1) * this.self.MIN_ROW_HEIGHT;
 
         var viewBoxSize = [columnWidth*numColumns, treeboxHeight];
 
@@ -61,11 +61,11 @@ Ext.define('CustomApp', {
         svg.attr('viewBox', '0 0 ' + viewBoxSize[0] + ' ' + viewBoxSize[1]);
 
         gApp._nodeTree = nodetree;      //Save for later
-        g = svg.append("g")        .attr("transform","translate(10,0)");
+        g = svg.append("g")        .attr("transform","translate(10,10)");
 //        g = svg.append("g")        .attr("transform","translate(" + columnWidth + ",0)");
         //For the size, the tree is rotated 90degrees. Height is for top node to deepest child
         var tree = d3.tree()
-            .size([viewBoxSize[1], viewBoxSize[0] - columnWidth])     //Take off a chunk for the text??
+            .size([viewBoxSize[1]-30, viewBoxSize[0] - columnWidth])     //Take off a chunk for the text??
             .separation( function(a,b) {
                     return ( a.parent == b.parent ? 1 : 1); //All leaves equi-distant
                 }
@@ -117,30 +117,6 @@ Ext.define('CustomApp', {
               .attr("y", function(d) { return d.children ? -8 : 0; })
               .style("text-anchor", "start")
               .text(function(d) {  return d.children?d.data.Name : d.data.Name + ' ' + (d.data.record && d.data.record.data.Name); });
-
-//        var cards = g.selectAll("circle");
-
-//        node.html( function(node,index,array) {
-//
-//            if ( node.data.card) {  //We have a node to show
-//                debugger;
-//                var mySelection = array[index];
-//
-//                //Now drop all items on this node and add a new set
-//                var lastChild = mySelection.lastChild;
-//                while (lastChild){
-//                    previousChild = lastChild.previousSibling;
-//                    mySelection.remove(lastChild);
-//                    lastChild = previousChild;
-//                }
-//
-//                mySelection.append("circle")
-//                    .attr("r",15)
-//                    .attr("class", "error--node");
-//            }
-//            return '';
-//        });
-
     },
     _nodePopOver: function(node,index,array) {
 
@@ -148,29 +124,6 @@ Ext.define('CustomApp', {
         //Get ordinal (or something ) to indicate we are the lowest level, then use "UserStories" instead of "Children"
         var field = node.data.record.data.Children? 'Children' : 'UserStories';
         var model = node.data.record.data.Children? node.data.record.data.Children._type : 'UserStory';
-//        this.add({
-//            xtype: 'rallypopoverchilditemslistview',
-//            target: array[index],
-//            record: node.data.record,
-//            childField: field,
-//            gridConfig: {
-//                columnCfgs : [
-//                    'FormattedID',
-//                    'Name',
-//                    'Owner',
-//                    'Project',
-//                    'PercentDoneByStoryCount',
-//                    'PercentDoneByStoryPlanEstimate'
-//                ]
-//            },
-//            model: model
-//        });
-//
-//        Rally.ui.popover.PopoverFactory.bake({
-//            field: field,
-//            record: node.data.record,
-//            target: array[index]
-//        });
 
         Ext.create('Rally.ui.dialog.Dialog', {
             autoShow: true,
@@ -178,7 +131,10 @@ Ext.define('CustomApp', {
             closable: true,
             width: 600,
             title: 'Descendants of ' + node.data.record.get('FormattedID') + ': ' + node.data.record.get('Name'),
-            items: {
+            items: [{
+                    xtype: ''
+                },
+                {
                 xtype: 'rallypopoverchilditemslistview',
                 target: array[index],
                 record: node.data.record,
@@ -198,7 +154,7 @@ Ext.define('CustomApp', {
                     ]
                 },
                 model: model
-            }
+            }]
         });
     },
 
