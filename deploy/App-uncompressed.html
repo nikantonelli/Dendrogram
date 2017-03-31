@@ -13,7 +13,7 @@
     itemId: 'rallyApp',
     statics: {
         MIN_COLUMN_WIDTH:   300,        //Looks silly on less than this
-        MIN_ROW_HEIGHT: 90                  //A cards minimum height is 80, so add a bit
+        MIN_ROW_HEIGHT: 20                  //A cards minimum height is 80, so add a bit
     },
     items: [
         {
@@ -74,7 +74,7 @@
 //        g = svg.append("g")        .attr("transform","translate(" + columnWidth + ",0)");
         //For the size, the tree is rotated 90degrees. Height is for top node to deepest child
         var tree = d3.tree()
-            .size([viewBoxSize[1], viewBoxSize[0]- columnWidth])     //Take off a chunk for the text??
+            .size([viewBoxSize[1], viewBoxSize[0] - columnWidth])     //Take off a chunk for the text??
             .separation( function(a,b) {
                     return ( a.parent == b.parent ? 1 : 1); //All leaves equi-distant
                 }
@@ -116,7 +116,8 @@
             .attr("r", 5)
             .attr("class", function (d) {
                 return d.data.error ? "error--node" : "no--errors";
-            });
+            })
+            .on("click", function(node, index, array) { gApp._nodePopOver(node,index,array)});
 
         node.append("text")
               .attr("dy", 3)
@@ -150,9 +151,64 @@
 //        });
 
     },
-    _createNodeElement: function(node,index,array) {
-        debugger;
-        return '<div><text x="0" y= "8">text</text></div>';
+    _nodePopOver: function(node,index,array) {
+
+        if (!(node.data.record.data.ObjectID)) return; //Only exists on real items
+        //Get ordinal (or something ) to indicate we are the lowest level, then use "UserStories" instead of "Children"
+        var field = node.data.record.data.Children? 'Children' : 'UserStories';
+        var model = node.data.record.data.Children? node.data.record.data.Children._type : 'UserStory';
+//        this.add({
+//            xtype: 'rallypopoverchilditemslistview',
+//            target: array[index],
+//            record: node.data.record,
+//            childField: field,
+//            gridConfig: {
+//                columnCfgs : [
+//                    'FormattedID',
+//                    'Name',
+//                    'Owner',
+//                    'Project',
+//                    'PercentDoneByStoryCount',
+//                    'PercentDoneByStoryPlanEstimate'
+//                ]
+//            },
+//            model: model
+//        });
+//
+//        Rally.ui.popover.PopoverFactory.bake({
+//            field: field,
+//            record: node.data.record,
+//            target: array[index]
+//        });
+
+        Ext.create('Rally.ui.dialog.Dialog', {
+            autoShow: true,
+            draggable: true,
+            closable: true,
+            width: 600,
+            title: 'Descendants of ' + node.data.record.get('FormattedID') + ': ' + node.data.record.get('Name'),
+            items: {
+                xtype: 'rallypopoverchilditemslistview',
+                target: array[index],
+                record: node.data.record,
+                childField: field,
+                addNewConfig: null,
+                gridConfig: {
+                    enableEditing: false,
+                    enableRanking: false,
+                    enableBulkEdit: false,
+                    showRowActionsClumn: false,
+                    columnCfgs : [
+                        'FormattedID',
+                        'Name',
+                        'Owner',
+                        'PercentDoneByStoryCount',
+                        'PercentDoneByStoryPlanEstimate'
+                    ]
+                },
+                model: model
+            }
+        });
     },
 
     //Entry point after creation of render box
@@ -309,7 +365,7 @@
                 xtype: 'rallyinlinefiltercontrol',
                 itemId: 'filterPanel',
                 context: this.getContext(),
-                margin: '5 0 0 20',
+                margin: '5 0 0 60',
                 height: 26,
                 inlineFilterButtonConfig: {
                     stateful: true,
@@ -470,7 +526,6 @@
             nodes.push( { 'Name' : 'Unknown ' + typedef.Name,
                 'record': {
                     'data': {
-                            'type' : typedef.type,
                             'FormattedID' : 'Parent Not Set',
                             'Name': 'Missing Parent (' + typedef.Name + ')',
                             '_ref': '/' + typedef.type + '/null',
