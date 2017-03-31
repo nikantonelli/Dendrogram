@@ -413,6 +413,7 @@ Ext.define('CustomApp', {
         var loadPromise = [];
         var storeConfig =
             {
+                pageSize: 700,    //We will make use of the batchproxy on big transfers
                 model: modelName,
                 fetch:  ['Name', 'FormattedID', 'Parent', 'DragAndDropRank', 'Children', 'ObjectID', 'Project']
             };
@@ -429,6 +430,7 @@ Ext.define('CustomApp', {
         var loadPromise = [];
         var config = {
             model: modelName,
+            pageSize: 700,
             context: {
                 workspace: gApp.getContext().getWorkspaceRef(),
                 project: null
