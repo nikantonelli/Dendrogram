@@ -11,10 +11,10 @@
     extend: 'Rally.app.App',
     componentCls: 'app',
     itemId: 'rallyApp',
-    statics: {
+    inheritableStatics: {
         MIN_COLUMN_WIDTH:   300,        //Looks silly on less than this
         MIN_ROW_HEIGHT: 20 ,                 //A cards minimum height is 80, so add a bit
-        LOAD_STORE_MAX_RECORDS: 500 //Unless I fix the use of 'OR'ed filters, this is the max
+        LOAD_STORE_MAX_RECORDS: 500 //Can be slow if you fetch too many
     },
     items: [
         {
@@ -363,17 +363,20 @@
             gApp._nodeTree = null;
         }
         //Starting with lowest selected by the combobox, go up
+        //var a = gApp.self.LOAD_STORE_MAX_RECORDS;
         var typeRecord = ptype.getRecord();
         var modelNumber = typeRecord.get('Ordinal');
         var typeRecords = ptype.store.getRecords();
         gApp._loadStoreLocal( typeRecords[modelNumber].get('TypePath')).then({
             success: function(dataArray) {
-debugger;
-                if (dataArray[0].length >= gApp.self.LOAD_MAX_STORE_RECORDS) {
-                    Rally.ui.notify.Notifier.showWarning({message: 'Maximum limit of records reached: ' + gApp.self.LOAD_MAX_STORE_RECORDS});
+//                b =gApp.self.LOAD_STORE_MAX_RECORDS;
+//                if (dataArray[0].length >= b) {
+//                    Rally.ui.notify.Notifier.showWarning({message: 'Maximum limit of records reached: ' + b});
+                if (dataArray[0].length >= gApp.self.LOAD_STORE_MAX_RECORDS) {
+                    Rally.ui.notify.Notifier.showWarning({message: 'Excessive limit of first level records. Narrow your scope '});
                 }
                 //Start the recursive trawl upwards through the levels
-                gApp._loadParents(dataArray, modelNumber);
+                gApp._loadParents(_.flatten(dataArray), modelNumber);
             },
             failure: function(error) {
                 console.log("Failed to load a store");
@@ -381,9 +384,8 @@ debugger;
         });
     },
 
-    _loadParents: function(dataArray, modelNumber) {
-    console.log('loadParents: ', dataArray);
-        var data = dataArray[0];
+    _loadParents: function(data, modelNumber) {
+    console.log('loadParents: ', data);
         var parentModelNumber = modelNumber + 1;
         if ((data.length == 0)  ){
             //No more parents available, so branch off
@@ -407,9 +409,12 @@ debugger;
                 parentsToFind = _.uniq(parentsToFind, function(p) { return p.value});
                 //Do those have any parents to look for
                 if (parentsToFind.length) {
-                    gApp._loadStoreGlobal(gApp._getModelFromOrd(parentModelNumber), Rally.data.wsapi.Filter.or(parentsToFind)).then({
+                    gApp._loadStoreGlobal(gApp._getModelFromOrd(parentModelNumber), parentsToFind).then({
+//                    gApp._loadStoreGlobal(gApp._getModelFromOrd(parentModelNumber), Rally.data.wsapi.Filter.or(parentsToFind)).then({
                         success: function (dArray) {
-                            gApp._loadParents(dArray, parentModelNumber);
+                        debugger;
+                            // After multiple fetches, we need to reduce down to a single level of array nesting
+                            gApp._loadParents(_.flatten(dArray), parentModelNumber);
                         },
                         failure: function(error) {
                             console.log('Oops!');
@@ -428,7 +433,8 @@ debugger;
         var loadPromise = [];
         var storeConfig =
             {
-                pageSize: this.self.LOAD_STORE_MAX_RECORDS,    //We will make use of the batchproxy on big transfers
+                pageSize: Infinity,    //We will make use of the batchproxy on big transfers
+//                pageSize: this.self.LOAD_STORE_MAX_RECORDS,    //We will make use of the batchproxy on big transfers
                 model: modelName,
                 fetch:  ['Name', 'FormattedID', 'Parent', 'DragAndDropRank', 'Children', 'ObjectID', 'Project']
             };
@@ -441,7 +447,7 @@ debugger;
         return Deft.Promise.all(loadPromise);
     },
     //Load some artifacts from the global arena as a promise
-    _loadStoreGlobal: function(modelName, filters) {
+    _loadStoreGlobal: function(modelName, parents) {
         var loadPromise = [];
         var config = {
             model: modelName,
@@ -452,11 +458,18 @@ debugger;
             },
             fetch:  ['Name', 'FormattedID', 'Parent', 'DragAndDropRank', 'Children', 'ObjectID', 'Project']
         };
-        if (filters) {
-            config.filters = filters
+debugger;
+        while (parents.length) {
+            config.pageSize = parents.length >= this.self.LOAD_STORE_MAX_RECORDS ? this.self.LOAD_STORE_MAX_RECORDS : parents.length;
+//            remaining -= config.pageSize;
+//            position += config.pageSize;
+
+            //Get the filters from the array
+            config.filters = Rally.data.wsapi.Filter.or(_.first(parents, config.pageSize));
+            parents = _.rest(parents, config.pageSize);
+            var store = Ext.create('Rally.data.wsapi.Store', config);
+            loadPromise.push(store.load());
         }
-        var store = Ext.create('Rally.data.wsapi.Store', config);
-        loadPromise.push(store.load());
         return Deft.Promise.all(loadPromise);
     },
     _createNodes: function(data) {

@@ -2,10 +2,11 @@ Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
     itemId: 'rallyApp',
-    statics: {
+    inheritableStatics: {
         MIN_COLUMN_WIDTH:   300,        //Looks silly on less than this
         MIN_ROW_HEIGHT: 20 ,                 //A cards minimum height is 80, so add a bit
-        LOAD_STORE_MAX_RECORDS: 500 //Unless I fix the use of 'OR'ed filters, this is the max
+        LOAD_STORE_MAX_RECORDS: 20, //Can be slow if you fetch too many
+        WARN_STORE_MAX_RECORDS: 300 //Can be slow if you fetch too many
     },
     items: [
         {
@@ -354,18 +355,20 @@ Ext.define('CustomApp', {
             gApp._nodeTree = null;
         }
         //Starting with lowest selected by the combobox, go up
-        var a = gApp.self.LOAD_STORE_MAX_RECORDS;
+        //var a = gApp.self.LOAD_STORE_MAX_RECORDS;
         var typeRecord = ptype.getRecord();
         var modelNumber = typeRecord.get('Ordinal');
         var typeRecords = ptype.store.getRecords();
         gApp._loadStoreLocal( typeRecords[modelNumber].get('TypePath')).then({
             success: function(dataArray) {
-                b =gApp.self.LOAD_STORE_MAX_RECORDS;
-                if (dataArray[0].length >= b) {
-                    Rally.ui.notify.Notifier.showWarning({message: 'Maximum limit of records reached: ' + b});
+//                b =gApp.self.LOAD_STORE_MAX_RECORDS;
+//                if (dataArray[0].length >= b) {
+//                    Rally.ui.notify.Notifier.showWarning({message: 'Maximum limit of records reached: ' + b});
+                if (dataArray[0].length >= gApp.self.WARN_STORE_MAX_RECORDS) {
+                    Rally.ui.notify.Notifier.showWarning({message: 'Excessive limit of first level records. Narrow your scope '});
                 }
                 //Start the recursive trawl upwards through the levels
-                gApp._loadParents(dataArray, modelNumber);
+                gApp._loadParents(_.flatten(dataArray), modelNumber);
             },
             failure: function(error) {
                 console.log("Failed to load a store");
@@ -373,9 +376,8 @@ Ext.define('CustomApp', {
         });
     },
 
-    _loadParents: function(dataArray, modelNumber) {
-    console.log('loadParents: ', dataArray);
-        var data = dataArray[0];
+    _loadParents: function(data, modelNumber) {
+    console.log('loadParents: ', data);
         var parentModelNumber = modelNumber + 1;
         if ((data.length == 0)  ){
             //No more parents available, so branch off
@@ -384,7 +386,7 @@ Ext.define('CustomApp', {
         else {
             gApp._nodes = gApp._nodes.concat(gApp._createNodes(data));
             if (parentModelNumber > gApp._highestOrdinal()) {
-                //No more parents to find, so branch off. This can happen is the user does not have permission to get the parents
+                //No more parents to find, so branch off. This can happen if the user does not have permission to get the parents
                 gApp._enterMainApp();
             }
             else {
@@ -399,9 +401,12 @@ Ext.define('CustomApp', {
                 parentsToFind = _.uniq(parentsToFind, function(p) { return p.value});
                 //Do those have any parents to look for
                 if (parentsToFind.length) {
-                    gApp._loadStoreGlobal(gApp._getModelFromOrd(parentModelNumber), Rally.data.wsapi.Filter.or(parentsToFind)).then({
+                    gApp._loadStoreGlobal(gApp._getModelFromOrd(parentModelNumber), parentsToFind).then({
+//                    gApp._loadStoreGlobal(gApp._getModelFromOrd(parentModelNumber), Rally.data.wsapi.Filter.or(parentsToFind)).then({
                         success: function (dArray) {
-                            gApp._loadParents(dArray, parentModelNumber);
+                        debugger;
+                            // After multiple fetches, we need to reduce down to a single level of array nesting
+                            gApp._loadParents(_.flatten(dArray), parentModelNumber);
                         },
                         failure: function(error) {
                             console.log('Oops!');
@@ -420,7 +425,8 @@ Ext.define('CustomApp', {
         var loadPromise = [];
         var storeConfig =
             {
-                pageSize: this.self.LOAD_STORE_MAX_RECORDS,    //We will make use of the batchproxy on big transfers
+//                pageSize: Infinity,    //We will make use of the batchproxy on big transfers
+                pageSize: 20000,    //We will make use of the batchproxy on big transfers
                 model: modelName,
                 fetch:  ['Name', 'FormattedID', 'Parent', 'DragAndDropRank', 'Children', 'ObjectID', 'Project']
             };
@@ -432,9 +438,10 @@ Ext.define('CustomApp', {
         loadPromise.push(store.load());
         return Deft.Promise.all(loadPromise);
     },
+
     //Load some artifacts from the global arena as a promise
-    _loadStoreGlobal: function(modelName, filters) {
-        var loadPromise = [];
+    _loadStoreGlobal: function(modelName, parents) {
+        var loadPromises = [];
         var config = {
             model: modelName,
             pageSize: this.self.LOAD_STORE_MAX_RECORDS,
@@ -444,12 +451,16 @@ Ext.define('CustomApp', {
             },
             fetch:  ['Name', 'FormattedID', 'Parent', 'DragAndDropRank', 'Children', 'ObjectID', 'Project']
         };
-        if (filters) {
-            config.filters = filters
+        while (parents.length) {
+            var wConf = Ext.clone(config);
+            wConf.pageSize = parents.length >= this.self.LOAD_STORE_MAX_RECORDS ? this.self.LOAD_STORE_MAX_RECORDS : parents.length;
+            //Get the filters from the array
+            wConf.filters = Rally.data.wsapi.Filter.or(_.first(parents, wConf.pageSize));
+            parents = _.rest(parents, wConf.pageSize);
+            var store = Ext.create('Rally.data.wsapi.Store', wConf);
+            loadPromises.push(store.load());
         }
-        var store = Ext.create('Rally.data.wsapi.Store', config);
-        loadPromise.push(store.load());
-        return Deft.Promise.all(loadPromise);
+        return Deft.Promise.all(loadPromises);
     },
     _createNodes: function(data) {
         //These need to be sorted into a hierarchy based on what we have. We are going to add 'other' nodes later
