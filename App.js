@@ -110,7 +110,9 @@ Ext.define('CustomApp', {
             .attr("class", function (d) {
                 return d.data.error ? "error--node" : "no--errors";
             })
-            .on("click", function(node, index, array) { gApp._nodePopOver(node,index,array)});
+            .on("click", function(node, index, array) { gApp._nodeClick(node,index,array)})
+            .on("mouseover", function(node, index, array) { gApp._nodeMouseOver(node,index,array)})
+            .on("mouseout", function(node, index, array) { gApp._nodeMouseOut(node,index,array)});
 
         node.append("text")
               .attr("dy", 3)
@@ -120,8 +122,32 @@ Ext.define('CustomApp', {
               .style("text-anchor", "start")
               .text(function(d) {  return d.children?d.data.Name : d.data.Name + ' ' + (d.data.record && d.data.record.data.Name); });
     },
-    _nodePopOver: function(node,index,array) {
 
+    _nodeMouseOut: function(node, index,array){
+        if (node.card) node.card.hide();
+    },
+
+    _nodeMouseOver: function(node,index,array) {
+        if (!(node.data.record.data.ObjectID)) {
+            //Only exists on real items, so do something for the 'unknown' item
+            return;
+        } else {
+
+            if ( !node.card) {
+                var card = Ext.create('Rally.ui.cardboard.Card', {
+                    'record': node.data.record,
+                    width: this.self.MIN_COLUMN_WIDTH,
+                    height: 100,
+                    floating: true,
+                });
+                node.card = card;
+            }
+//            debugger;
+            node.card.show();
+        }
+    },
+
+    _nodeClick: function (node,index,array) {
         if (!(node.data.record.data.ObjectID)) return; //Only exists on real items
         //Get ordinal (or something ) to indicate we are the lowest level, then use "UserStories" instead of "Children"
         var field = node.data.record.data.Children? 'Children' : 'UserStories';
@@ -404,7 +430,6 @@ Ext.define('CustomApp', {
                     gApp._loadStoreGlobal(gApp._getModelFromOrd(parentModelNumber), parentsToFind).then({
 //                    gApp._loadStoreGlobal(gApp._getModelFromOrd(parentModelNumber), Rally.data.wsapi.Filter.or(parentsToFind)).then({
                         success: function (dArray) {
-                        debugger;
                             // After multiple fetches, we need to reduce down to a single level of array nesting
                             gApp._loadParents(_.flatten(dArray), parentModelNumber);
                         },
@@ -467,9 +492,8 @@ Ext.define('CustomApp', {
         var nodes = [];
         //Push them into an array we can reconfigure
         _.each(data, function(record) {
-            var card = Ext.create('Rally.ui.cardboard.Card', { record: record });
             var localNode = (gApp.getContext().getProjectRef() === record.get('Project')._ref);
-            nodes.push({'Name': record.get('FormattedID'), 'record': record, 'local': localNode, 'card': card});
+            nodes.push({'Name': record.get('FormattedID'), 'record': record, 'local': localNode});
         });
         return nodes;
     },
