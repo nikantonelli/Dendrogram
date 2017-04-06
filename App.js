@@ -2,12 +2,45 @@ Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
     itemId: 'rallyApp',
-    inheritableStatics: {
         MIN_COLUMN_WIDTH:   300,        //Looks silly on less than this
         MIN_ROW_HEIGHT: 20 ,                 //A cards minimum height is 80, so add a bit
-        LOAD_STORE_MAX_RECORDS: 20, //Can be slow if you fetch too many
-        WARN_STORE_MAX_RECORDS: 300 //Can be slow if you fetch too many
-    },
+        LOAD_STORE_MAX_RECORDS: 100, //Can blow up the Rally.data.wsapi.filter.Or
+        WARN_STORE_MAX_RECORDS: 300, //Can be slow if you fetch too many
+        STORE_FETCH_FIELD_LIST:
+            [
+                'Name',
+                'FormattedID',
+                'Parent',
+                'DragAndDropRank',
+                'Children',
+                'ObjectID',
+                'Project',
+                'DisplayColor',
+                'Owner',
+                'Blocked',
+                'BlockedReason',
+                'Ready',
+                'Tags',
+                'Workspace',
+                'RevisionHistory',
+                'CreationDate',
+                'PercentDoneByStoryCount',
+                'PercentDoneByStoryPlanEstimate',
+                'State',
+                'PreliminaryEstimate'
+            ],
+        CARD_DISPLAY_FIELD_LIST:
+            [
+                'Name',
+                'Owner',
+                'PreliminaryEstimate',
+                'Parent',
+                'Project',
+                'PercentDoneByStoryCount',
+                'PercentDoneByStoryPlanEstimate',
+                'State'
+            ],
+
     items: [
         {
             xtype: 'container',
@@ -20,7 +53,6 @@ Ext.define('CustomApp', {
             },
             listeners: {
                 afterrender:  function() {  gApp = this.up('#rallyApp'); gApp._onElementValid(this);},
-//                resize: function() {  gApp = this.up('#rallyApp'); gApp._onElementResize(this);}
             },
             visible: false
         }
@@ -45,8 +77,8 @@ Ext.define('CustomApp', {
 
         var numColumns = (gApp._highestOrdinal()+1); //Leave extras for offset at left and text at right
         var columnWidth = this.getSize().width/numColumns;
-        columnWidth = columnWidth > this.self.MIN_COLUMN_WIDTH ? columnWidth : this.self.MIN_COLUMN_WIDTH;
-        treeboxHeight = (nodetree.leaves().length +1) * this.self.MIN_ROW_HEIGHT;
+        columnWidth = columnWidth > gApp.MIN_COLUMN_WIDTH ? columnWidth : gApp.MIN_COLUMN_WIDTH;
+        treeboxHeight = (nodetree.leaves().length +1) * gApp.MIN_ROW_HEIGHT;
 
         var viewBoxSize = [columnWidth*numColumns, treeboxHeight];
 
@@ -64,7 +96,6 @@ Ext.define('CustomApp', {
 
         gApp._nodeTree = nodetree;      //Save for later
         g = svg.append("g")        .attr("transform","translate(10,10)");
-//        g = svg.append("g")        .attr("transform","translate(" + columnWidth + ",0)");
         //For the size, the tree is rotated 90degrees. Height is for top node to deepest child
         var tree = d3.tree()
             .size([viewBoxSize[1]-30, viewBoxSize[0] - columnWidth])     //Take off a chunk for the text??
@@ -95,20 +126,25 @@ Ext.define('CustomApp', {
             .data(nodetree.descendants())
             .enter().append("g")
             .attr("transform", function(d) { return "translate(" + d.y + "," + d.x + ")"; });
-//        node.append(
-//            "rect")
-//                .attr("x", function(d) { return -25;})
-//                .attr("y", function(d) { return -15;})
-//                .attr("width", 50)
-//                .attr("height", 30)
-//                .attr("rx", 5)
-//                .attr("ry", 5)
-//                .attr("fill", "red")
-//                .attr("opacity", 0.5);
+
+        //We're going to set the colour of the dot depndent on some criteria (in this case only in-progress
         node.append("circle")
             .attr("r", 5)
             .attr("class", function (d) {
-                return d.data.error ? "error--node" : "no--errors";
+                if (d.data.record.data.ObjectID){
+                    if (!d.data.record.get('State')) return "error--node";      //Not been set - which is an error in itself
+                    switch (d.data.record.get('State').Name) {
+                        case 'Backlog':
+                            return "no--errors--not--started";
+                        case 'Refinement':
+                        case 'In Progress':
+                            return "no--errors--in--progress";
+                        case 'Done':
+                            return "no--errors--done";
+                    }
+                } else {
+                    return d.data.error ? "error--node": "no--errors--done";
+                }
             })
             .on("click", function(node, index, array) { gApp._nodeClick(node,index,array)})
             .on("mouseover", function(node, index, array) { gApp._nodeMouseOver(node,index,array)})
@@ -136,14 +172,19 @@ Ext.define('CustomApp', {
             if ( !node.card) {
                 var card = Ext.create('Rally.ui.cardboard.Card', {
                     'record': node.data.record,
-                    width: this.self.MIN_COLUMN_WIDTH,
-                    height: 100,
+                    fields: gApp.CARD_DISPLAY_FIELD_LIST,
+                    constrain: false,
+                    width: gApp.MIN_COLUMN_WIDTH,
+                    height: 'auto',
                     floating: true,
+                    shadow: false,
+                    showAge: true,
+                    resizable: true
                 });
                 node.card = card;
             }
-//            debugger;
             node.card.show();
+//            debugger;
         }
     },
 
@@ -203,7 +244,6 @@ Ext.define('CustomApp', {
                     fieldLabel: 'Choose Lowest Portfolio Type :',
                     labelWidth: 100,
                     margin: '5 0 5 20',
-//                    valueField: 'Ordinal',
                     defaultSelectionPosition: 'first',
                     storeConfig: {
                         sorters: {
@@ -212,85 +252,13 @@ Ext.define('CustomApp', {
                         }
                     },
                     listeners: {
-                        select: function(a,b,c,d,e,f) { console.log(a,b,c,d,e,f); gApp._kickOff();}    //Jump off here to add portfolio size selector
+                        select: function() { gApp._kickOff();}    //Jump off here to add portfolio size selector
                     }
                 },
-//                {
-//                    xtype: 'rallybutton',
-//                    itemId: 'ancestorsButton',
-//                    margin: '5 0 5 20',
-//                    text: 'Show Ancestors',
-//                    handler: function() {
-//                        gApp._handleAncestors();
-//                    }
-//                },
-//                {
-//                    xtype: 'rallybutton',
-//                    itemId: 'descendantsButton',
-//                    margin: '5 0 5 20',
-//                    text: 'Show Descendants',
-//                    handler: function() {
-//                        gApp._handleDescendants();
-//                    }
-//                },
-//                {
-//                    xtype: 'rallyprojecttree',
-//                    autoLoadTopLevel: false,
-//                    topLevelStoreConfig: {
-//                        context: {
-//                            workspace: gApp.getContext().getWorkspaceRef(),
-//                            project: gApp.getContext().getProjectRef()
-//                        }
-//                    }
-//                }
             ]
         });
     },
 
-    _hideAncestors: function() {
-
-    },
-    _showAncestors: function() {
-        //For each leaf, check whether we have the parent, grand-parent, great-grand-parent, etc., etc.
-        var nodetree = gApp._nodeTree;
-        var leaves = nodetree.leaves();
-        debugger;
-    },
-    _handleAncestors: function() {
-        if ( this.hideAncestors) {
-            this.hideAncestors = false;
-            this.down('#ancestorsButton').setText('Show Ancestors');
-            this._hideAncestors();
-            console.log('Show A');
-        }
-        else {
-            this.down('#ancestorsButton').setText('Hide Ancestors');
-            this.hideAncestors = true;
-            this._showAncestors();
-            console.log('Hide A');
-        }
-    },
-    _hideDescendants: function() {
-
-    },
-    _showDescendants: function() {
-
-    },
-    _handleDescendants: function() {
-        if ( this.hideDescendants) {
-            this.hideDescendants = false;
-            this.down('#descendantsButton').setText('Show Descendants');
-            this._hideDescendants();
-            console.log('Show D');
-        }
-        else {
-            this.down('#descendantsButton').setText('Hide Descendants');
-            this.hideDescendants = true;
-            this._showDescendants();
-            console.log('Hide D');
-        }
-    },
-    
     _onFilterReady: function(inlineFilterPanel) {
         gApp.insert(1,inlineFilterPanel);
     },
@@ -381,20 +349,16 @@ Ext.define('CustomApp', {
             gApp._nodeTree = null;
         }
         //Starting with lowest selected by the combobox, go up
-        //var a = gApp.self.LOAD_STORE_MAX_RECORDS;
         var typeRecord = ptype.getRecord();
         var modelNumber = typeRecord.get('Ordinal');
         var typeRecords = ptype.store.getRecords();
         gApp._loadStoreLocal( typeRecords[modelNumber].get('TypePath')).then({
             success: function(dataArray) {
-//                b =gApp.self.LOAD_STORE_MAX_RECORDS;
-//                if (dataArray[0].length >= b) {
-//                    Rally.ui.notify.Notifier.showWarning({message: 'Maximum limit of records reached: ' + b});
-                if (dataArray[0].length >= gApp.self.WARN_STORE_MAX_RECORDS) {
+                if (dataArray.length >= gApp.WARN_STORE_MAX_RECORDS) {
                     Rally.ui.notify.Notifier.showWarning({message: 'Excessive limit of first level records. Narrow your scope '});
                 }
                 //Start the recursive trawl upwards through the levels
-                gApp._loadParents(_.flatten(dataArray), modelNumber);
+                gApp._loadParents(dataArray, modelNumber);
             },
             failure: function(error) {
                 console.log("Failed to load a store");
@@ -428,7 +392,6 @@ Ext.define('CustomApp', {
                 //Do those have any parents to look for
                 if (parentsToFind.length) {
                     gApp._loadStoreGlobal(gApp._getModelFromOrd(parentModelNumber), parentsToFind).then({
-//                    gApp._loadStoreGlobal(gApp._getModelFromOrd(parentModelNumber), Rally.data.wsapi.Filter.or(parentsToFind)).then({
                         success: function (dArray) {
                             // After multiple fetches, we need to reduce down to a single level of array nesting
                             gApp._loadParents(_.flatten(dArray), parentModelNumber);
@@ -447,21 +410,24 @@ Ext.define('CustomApp', {
     },
 
     _loadStoreLocal: function(modelName) {
-        var loadPromise = [];
+//    debugger;
+//        var loadPromise = [];
         var storeConfig =
             {
-//                pageSize: Infinity,    //We will make use of the batchproxy on big transfers
-                pageSize: 20000,    //We will make use of the batchproxy on big transfers
                 model: modelName,
-                fetch:  ['Name', 'FormattedID', 'Parent', 'DragAndDropRank', 'Children', 'ObjectID', 'Project']
+            fetch:  gApp.STORE_FETCH_FIELD_LIST
+
             };
-        if (gApp._filterInfo && gApp._filterInfo.filters.length)
+        if (gApp._filterInfo && gApp._filterInfo.filters.length) {
             storeConfig.filters = gApp._filterInfo.filters;
+            storeConfig.models = gApp._filterInfo.types;
+        }
 
         var store = Ext.create('Rally.data.wsapi.Store', storeConfig);
 
-        loadPromise.push(store.load());
-        return Deft.Promise.all(loadPromise);
+//        loadPromise.push(store.load());
+//        return Deft.Promise.all(loadPromise);
+        return store.load();
     },
 
     //Load some artifacts from the global arena as a promise
@@ -469,16 +435,16 @@ Ext.define('CustomApp', {
         var loadPromises = [];
         var config = {
             model: modelName,
-            pageSize: this.self.LOAD_STORE_MAX_RECORDS,
+            pageSize: gApp.LOAD_STORE_MAX_RECORDS,
             context: {
                 workspace: gApp.getContext().getWorkspaceRef(),
                 project: null
             },
-            fetch:  ['Name', 'FormattedID', 'Parent', 'DragAndDropRank', 'Children', 'ObjectID', 'Project']
+            fetch:  gApp.STORE_FETCH_FIELD_LIST
         };
         while (parents.length) {
             var wConf = Ext.clone(config);
-            wConf.pageSize = parents.length >= this.self.LOAD_STORE_MAX_RECORDS ? this.self.LOAD_STORE_MAX_RECORDS : parents.length;
+            wConf.pageSize = parents.length >= gApp.LOAD_STORE_MAX_RECORDS ? gApp.LOAD_STORE_MAX_RECORDS : parents.length;
             //Get the filters from the array
             wConf.filters = Rally.data.wsapi.Filter.or(_.first(parents, wConf.pageSize));
             parents = _.rest(parents, wConf.pageSize);
