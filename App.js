@@ -204,49 +204,11 @@ Ext.define('CustomApp', {
             title: 'Information for ' + node.data.record.get('FormattedID') + ': ' + node.data.record.get('Name'),
             items: [
                 {
-//                    xtype: 'component',
-//                    layout: {
-//                        type: 'vbox',
-//                        align: 'stretch'
-//                    },
-//                    record: node.data.record,
-//                    model: node.data.record.self.model,
-//                    details: '',
-//                    detailsField: 'Description',
-//                    detailsFieldBackup: 'Notes',
-//                    initComponent: function() {
-//                        this._setDetailsField();
-//                        this._createTpl();
-//                        this.callParent(arguments);
-//                    },
-//                    _setDetailsField: function() {
-//                        this.details = this.record.get(this.detailsField) || this.record.get(this.detailsFieldBackup);
-//                    },
-//                    _createTpl: function() {
-//                            //  Have to create the template this way to maintain scope when it is applied
-//                            this.tpl = new Ext.XTemplate(
-//                                '<tpl>',
-//                                    '<div class="header">',
-//                                        '<b>{[values[0].FormattedID]}:</b> {[values[0].Name]}',
-//                                    '</div>',
-//                                    '<div class="description">{[this.getDetails(values)]}</div>',
-//                                '</tpl>'
-//                            );
-//
-//                            this.tpl.self.addMembers({
-//                                getDetails: Ext.bind(function(data) {
-//                                    return this.detailsField;
-//                                }, this)
-//                            });
-//                        }
-
                         xtype: 'rallycard',
                         record: node.data.record,
                         fields: gApp.CARD_DISPLAY_FIELD_LIST,
                         showAge: true,
                         resizable: true
-
-
                 },
                 {
                 xtype: 'rallypopoverchilditemslistview',
