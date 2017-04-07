@@ -1,4 +1,4 @@
-My Inventory
+My Inventory Explorer
 =========================
 
 ## Overview
