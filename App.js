@@ -458,23 +458,17 @@ Ext.define('CustomApp', {
     },
 
     _loadStoreLocal: function(modelName) {
-//    debugger;
-//        var loadPromise = [];
         var storeConfig =
             {
                 model: modelName,
-            fetch:  gApp.STORE_FETCH_FIELD_LIST
-
+                limit: 20000,
+                fetch:  gApp.STORE_FETCH_FIELD_LIST
             };
         if (gApp._filterInfo && gApp._filterInfo.filters.length) {
             storeConfig.filters = gApp._filterInfo.filters;
             storeConfig.models = gApp._filterInfo.types;
         }
-
         var store = Ext.create('Rally.data.wsapi.Store', storeConfig);
-
-//        loadPromise.push(store.load());
-//        return Deft.Promise.all(loadPromise);
         return store.load();
     },
 
