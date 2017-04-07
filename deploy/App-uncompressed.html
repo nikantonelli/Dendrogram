@@ -36,7 +36,9 @@
                 'PercentDoneByStoryCount',
                 'PercentDoneByStoryPlanEstimate',
                 'State',
-                'PreliminaryEstimate'
+                'PreliminaryEstimate',
+                'Description',
+                'Notes'
             ],
         CARD_DISPLAY_FIELD_LIST:
             [
@@ -208,8 +210,53 @@
             draggable: true,
             closable: true,
             width: 600,
-            title: 'Descendants of ' + node.data.record.get('FormattedID') + ': ' + node.data.record.get('Name'),
+            title: 'Information for ' + node.data.record.get('FormattedID') + ': ' + node.data.record.get('Name'),
             items: [
+                {
+//                    xtype: 'component',
+//                    layout: {
+//                        type: 'vbox',
+//                        align: 'stretch'
+//                    },
+//                    record: node.data.record,
+//                    model: node.data.record.self.model,
+//                    details: '',
+//                    detailsField: 'Description',
+//                    detailsFieldBackup: 'Notes',
+//                    initComponent: function() {
+//                        this._setDetailsField();
+//                        this._createTpl();
+//                        this.callParent(arguments);
+//                    },
+//                    _setDetailsField: function() {
+//                        this.details = this.record.get(this.detailsField) || this.record.get(this.detailsFieldBackup);
+//                    },
+//                    _createTpl: function() {
+//                            //  Have to create the template this way to maintain scope when it is applied
+//                            this.tpl = new Ext.XTemplate(
+//                                '<tpl>',
+//                                    '<div class="header">',
+//                                        '<b>{[values[0].FormattedID]}:</b> {[values[0].Name]}',
+//                                    '</div>',
+//                                    '<div class="description">{[this.getDetails(values)]}</div>',
+//                                '</tpl>'
+//                            );
+//
+//                            this.tpl.self.addMembers({
+//                                getDetails: Ext.bind(function(data) {
+//                                    return this.detailsField;
+//                                }, this)
+//                            });
+//                        }
+
+                        xtype: 'rallycard',
+                        record: node.data.record,
+                        fields: gApp.CARD_DISPLAY_FIELD_LIST,
+                        showAge: true,
+                        resizable: true
+
+
+                },
                 {
                 xtype: 'rallypopoverchilditemslistview',
                 target: array[index],
@@ -217,6 +264,7 @@
                 childField: field,
                 addNewConfig: null,
                 gridConfig: {
+                    title: 'Children of ' + node.data.record.data.FormattedID,
                     enableEditing: false,
                     enableRanking: false,
                     enableBulkEdit: false,
@@ -17162,6 +17210,10 @@ Object.defineProperty(exports, '__esModule', { value: true });
     <style type="text/css">
         .node text {
   font: 10px sans-serif;
+}
+.info--box text {
+  font-size: 14px;
+  font-family: "ProximaNovaSemiBold,Helvetica,Arial";
 }
 .node--internal text {
   text-shadow: 0 1px 0 #ffffff, 0 -1px 0 #ffffff, 1px 0 0 #ffffff, -1px 0 0 #ffffff;
