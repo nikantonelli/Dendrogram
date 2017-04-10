@@ -28,6 +28,13 @@
   stroke-opacity: 0.0;
   stroke-width: 1.5px;
 }
+
+.predecessor--link {
+  fill: dashed;
+  stroke: lightblue;
+  stroke-opacity: 0.5;
+  stroke-width: 3px;
+}
 .error--node  {
   fill: #f00;
 }

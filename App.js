@@ -29,7 +29,9 @@ Ext.define('CustomApp', {
                 'State',
                 'PreliminaryEstimate',
                 'Description',
-                'Notes'
+                'Notes',
+                'Predecessors',
+                'Successors'
             ],
         CARD_DISPLAY_FIELD_LIST:
             [
@@ -69,6 +71,7 @@ Ext.define('CustomApp', {
     //Continuation point after selectors ready/changed
     _enterMainApp: function() {
 
+        gApp._initialiseD3();
     console.log('Enter main app');
         //Get all the nodes and the "Unknown" parent virtual nodes
         gApp._nodes = gApp._nodes.concat(gApp._createMyNodes());
@@ -159,6 +162,10 @@ Ext.define('CustomApp', {
               .attr("y", function(d) { return d.children ? -8 : 0; })
               .style("text-anchor", "start")
               .text(function(d) {  return d.children?d.data.Name : d.data.Name + ' ' + (d.data.record && d.data.record.data.Name); });
+
+        //Now put in, but hide, all the dependency links
+        node.addPredecessors(g.selectAll("circle"));
+//        node.addSuccessors();
     },
 
     _nodeMouseOut: function(node, index,array){
@@ -186,7 +193,6 @@ Ext.define('CustomApp', {
                 node.card = card;
             }
             node.card.show();
-//            debugger;
         }
     },
 
@@ -527,7 +533,7 @@ Ext.define('CustomApp', {
         var typeRecord =  _.find(  gApp._typeStore.data.items, function(type) { return type.get('Ordinal') === ord;});
         return (typeRecord && typeRecord.get('TypePath').toLowerCase());
     },
-    _findParentById: function(nodes, id) {
+    _findNodeById: function(nodes, id) {
         return _.find(nodes, function(node) {
             return node.record.data._ref === id;
         });
@@ -548,19 +554,20 @@ Ext.define('CustomApp', {
             //If we have a parent type, we will try to return the null parent for this type.
             if (pt) {
                 var parentName = '/' + pt + '/null';
-                pParent = gApp._findParentById(nodes, parentName);
+                pParent = gApp._findNodeById(nodes, parentName);
             }
         }
         //If the record is a type at the top level, then we must return something to indicate 'root'
-        return pParent?pParent: gApp._findParentById(nodes, 'root');
+        return pParent?pParent: gApp._findNodeById(nodes, 'root');
     },
         //Routines to manipulate the types
 
-     _getTypeList: function() {
+     _getTypeList: function(lowestOrdinal) {
         var piModels = [];
         _.each(gApp._typeStore.data.items, function(type) {
             //Only push types above that selected
-            piModels.push({ 'type': type.data.TypePath.toLowerCase(), 'Name': type.data.Name});
+            if (type.data.Ordinal >= lowestOrdinal )
+                piModels.push({ 'type': type.data.TypePath.toLowerCase(), 'Name': type.data.Name});
         });
         return piModels;
     },
@@ -589,5 +596,42 @@ Ext.define('CustomApp', {
     },
     launch: function() {
         //API Docs: https://help.rallydev.com/apps/2.1/doc/
+    },
+
+    _initialiseD3: function() {
+        d3.selection.prototype.addPredecessors = function  (nodes) {
+            return this.each(function(node, index, array) {
+                var record = node.data.record;
+                if (record.data.ObjectID && record.get('Predecessors').Count) {    //Only real ones have this
+                    record.getCollection('Predecessors').load().then({
+                        success: function(preds) {
+                            _.each(preds, function(pred){
+                            debugger;
+                                var pn = _.find(nodes.nodes, function(d) {
+                                    return d.data.record && (d.data.record.data._ref === pred.get('_ref'));
+                                });
+                                pn.append("path")
+                                    .attr("class", "predecessor--link")
+                                    .attr("d", function(d) {
+                                        return "M" + d.y + "," + d.x
+                                            + "C" + (node.y + 100) + "," + d.x
+                                            + " " + (node.y + 100) + "," + node.x
+                                            + " " + node.y + "," + node.x;
+                                })
+
+                            });
+                        },
+                        failure: function(error) {
+                            debugger;
+                        }
+                    });
+                }
+            });
+        }
+        d3.selection.prototype.addSuccessors = function  () {
+            return this.each(function(node, index, array) {
+                debugger;
+            });
+        }
     }
 });
