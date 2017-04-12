@@ -6,6 +6,8 @@ Ext.define('CustomApp', {
         MIN_ROW_HEIGHT: 20 ,                 //A cards minimum height is 80, so add a bit
         LOAD_STORE_MAX_RECORDS: 100, //Can blow up the Rally.data.wsapi.filter.Or
         WARN_STORE_MAX_RECORDS: 300, //Can be slow if you fetch too many
+        NODE_CIRCLE_SIZE: 5,                //Pixel radius of dots
+        LEFT_MARGIN_SIZE: 100,               //Leave space for "World view" text
         STORE_FETCH_FIELD_LIST:
             [
                 'Name',
@@ -31,7 +33,11 @@ Ext.define('CustomApp', {
                 'Description',
                 'Notes',
                 'Predecessors',
-                'Successors'
+                'Successors',
+                //Customer specific after here. Delete as appropriate
+                'c_ProjectIDOBN',
+                'c_QRWP',
+                'c_RAGStatus'
             ],
         CARD_DISPLAY_FIELD_LIST:
             [
@@ -42,7 +48,11 @@ Ext.define('CustomApp', {
                 'Project',
                 'PercentDoneByStoryCount',
                 'PercentDoneByStoryPlanEstimate',
-                'State'
+                'State',
+                'c_ProjectIDOBN',
+                'c_QRWP',
+                'c_RAGStatus'
+
             ],
 
     items: [
@@ -97,13 +107,15 @@ Ext.define('CustomApp', {
         var svg = d3.select('svg');
         svg.attr('class', 'rootSurface');
         svg.attr('preserveAspectRatio', 'none');
-        svg.attr('viewBox', '0 0 ' + viewBoxSize[0] + ' ' + viewBoxSize[1]);
+        svg.attr('viewBox', '0 0 ' + viewBoxSize[0] + ' ' + (viewBoxSize[1]+ gApp.NODE_CIRCLE_SIZE));
 
         gApp._nodeTree = nodetree;      //Save for later
-        g = svg.append("g")        .attr("transform","translate(10,10)");
+//        g = svg.append("g")        .attr("transform","translate(10,10)");
+        g = svg.append("g")        .attr("transform","translate(" + gApp.LEFT_MARGIN_SIZE + ",10)");
         //For the size, the tree is rotated 90degrees. Height is for top node to deepest child
         var tree = d3.tree()
-            .size([viewBoxSize[1]-30, viewBoxSize[0] - columnWidth])     //Take off a chunk for the text??
+            .size([viewBoxSize[1], viewBoxSize[0] - (columnWidth + gApp.LEFT_MARGIN_SIZE)])     //Take off a chunk for the text??
+//            .size([viewBoxSize[1]-gApp.LEFT_MARGIN_SIZE, viewBoxSize[0] - columnWidth])     //Take off a chunk for the text??
             .separation( function(a,b) {
                     return ( a.parent == b.parent ? 1 : 1); //All leaves equi-distant
                 }
@@ -134,7 +146,7 @@ Ext.define('CustomApp', {
 
         //We're going to set the colour of the dot depndent on some criteria (in this case only in-progress
         node.append("circle")
-            .attr("r", 5)
+            .attr("r", gApp.NODE_CIRCLE_SIZE)
             .attr("class", function (d) {
                 if (d.data.record.data.ObjectID){
                     if (!d.data.record.get('State')) return "error--node";      //Not been set - which is an error in itself
@@ -158,9 +170,10 @@ Ext.define('CustomApp', {
         node.append("text")
               .attr("dy", 3)
               .attr("visible", false)
-              .attr("x", function(d) { return d.children ? -8 : 8; })
-              .attr("y", function(d) { return d.children ? -8 : 0; })
-              .style("text-anchor", "start")
+              .attr("x", function(d) { return d.children ? -(gApp.NODE_CIRCLE_SIZE + 5) : (gApp.NODE_CIRCLE_SIZE + 5); })
+              .attr("y", function(d) { return d.children ? -(gApp.NODE_CIRCLE_SIZE + 5): 0; })
+//              .style("text-anchor", "start" )
+              .style("text-anchor",  function(d) { return d.parent ? "start" : "end";})
               .text(function(d) {  return d.children?d.data.Name : d.data.Name + ' ' + (d.data.record && d.data.record.data.Name); });
 
         //Now put in, but hide, all the dependency links
@@ -231,9 +244,11 @@ Ext.define('CustomApp', {
                     columnCfgs : [
                         'FormattedID',
                         'Name',
-                        'Owner',
+//                        'Owner',
                         'PercentDoneByStoryCount',
-                        'PercentDoneByStoryPlanEstimate'
+                        'PercentDoneByStoryPlanEstimate',
+                        'State',
+                        'c_RAGSatus'
                     ]
                 },
                 model: model
@@ -481,7 +496,7 @@ Ext.define('CustomApp', {
             'record': {
                 'data': {
                     '_ref': 'root',
-                    'Name': 'World View'
+                    'Name': ''
                 }
             },
             'local':true

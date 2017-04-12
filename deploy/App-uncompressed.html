@@ -40,7 +40,11 @@
                 'Description',
                 'Notes',
                 'Predecessors',
-                'Successors'
+                'Successors',
+                //Customer specific after here. Delete as appropriate
+                'c_ProjectIDOBN',
+                'c_QRWP',
+                'c_RAGStatus'
             ],
         CARD_DISPLAY_FIELD_LIST:
             [
@@ -51,7 +55,11 @@
                 'Project',
                 'PercentDoneByStoryCount',
                 'PercentDoneByStoryPlanEstimate',
-                'State'
+                'State',
+                'c_ProjectIDOBN',
+                'c_QRWP',
+                'c_RAGStatus'
+
             ],
 
     items: [
@@ -240,9 +248,11 @@
                     columnCfgs : [
                         'FormattedID',
                         'Name',
-                        'Owner',
+//                        'Owner',
                         'PercentDoneByStoryCount',
-                        'PercentDoneByStoryPlanEstimate'
+                        'PercentDoneByStoryPlanEstimate',
+                        'State',
+                        'c_RAGStatus'
                     ]
                 },
                 model: model
