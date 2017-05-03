@@ -184,8 +184,9 @@ Ext.define('CustomApp', {
             .attr("class", function (d) {   //Work out the individual dot colour
                 var lClass = "dotOutline"; // Might want to use outline to indicate something later
                 if (d.data.record.data.ObjectID){
+                    debugger;
                     if (!d.data.record.get('State')) return "error--node";      //Not been set - which is an error in itself
-                    lClass +=  ' q' + ((d.data.record.get('State').OrderIndex-1) + '-' + gApp._highestOrdinal()); 
+                    lClass +=  ' q' + ((d.data.record.get('State').OrderIndex-1) + '-' + gApp.numStates[gApp._getOrdFromModel(d.data.record.get('_type'))]); 
                 } else {
                     return d.data.error ? "error--node": "no--errors--done";
                 }
@@ -540,6 +541,8 @@ Ext.define('CustomApp', {
             ]
         });
     },
+    numStates: [],
+
     _addColourHelper: function() {
         var hdrBox = gApp.down('#headerBox');
         var numColours = gApp._highestOrdinal() + 1;
@@ -609,13 +612,14 @@ Ext.define('CustomApp', {
             );
             typeStore.load().then({ 
                 success: function(records){
+                        gApp.numStates[modelNum] = records.length;  //Save for drawing other circles
                             _.each(records, function(state){
                                 var idx = state.get('OrderIndex');
                                 colourBox.append("circle")
                                     .attr("cx", 0)
                                     .attr("cy", idx * gApp.MIN_ROW_HEIGHT)    //Leave space for text of name
                                     .attr("r", gApp.NODE_CIRCLE_SIZE)
-                                    .attr("class", "q" + (state.get('OrderIndex')-1) + '-' + gApp._highestOrdinal());
+                                    .attr("class", "q" + (state.get('OrderIndex')-1) + '-' + records.length)
                                 colourBox.append("text")
                                     .attr("dx", gApp.NODE_CIRCLE_SIZE+2)
                                     .attr("dy", gApp.NODE_CIRCLE_SIZE/2)
