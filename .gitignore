@@ -19,3 +19,5 @@ _SpecRunner.html
 test/AppSpec.js
 
 App.orig.js
+
+.vscode/tasks.json
