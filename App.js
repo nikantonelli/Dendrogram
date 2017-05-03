@@ -1,12 +1,34 @@
 Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
+    config: {
+        defaultSettings: {
+            keepTypesAligned: true
+        }
+    },
+    getSettingsFields: function() {
+        var returned = [
+        {
+            name: 'keepTypesAligned',
+            xtype: 'rallycheckboxfield',
+            fieldLabel: 'Columnised Types',
+            labelAlign: 'top'
+        },
+        {
+            name: 'hideArchived',
+            xtype: 'rallycheckboxfield',
+            fieldLabel: 'Hide Archived',
+            labelAlign: 'top'
+        }
+        ];
+        return returned;
+    },
     itemId: 'rallyApp',
-        MIN_COLUMN_WIDTH:   300,        //Looks silly on less than this
-        MIN_ROW_HEIGHT: 20 ,                 //A cards minimum height is 80, so add a bit
+        MIN_COLUMN_WIDTH:   200,        //Looks silly on less than this
+        MIN_ROW_HEIGHT: 20 ,                 //
         LOAD_STORE_MAX_RECORDS: 100, //Can blow up the Rally.data.wsapi.filter.Or
         WARN_STORE_MAX_RECORDS: 300, //Can be slow if you fetch too many
-        NODE_CIRCLE_SIZE: 5,                //Pixel radius of dots
+        NODE_CIRCLE_SIZE: 8,                //Pixel radius of dots
         LEFT_MARGIN_SIZE: 100,               //Leave space for "World view" text
         STORE_FETCH_FIELD_LIST:
             [
@@ -34,10 +56,12 @@ Ext.define('CustomApp', {
                 'Notes',
                 'Predecessors',
                 'Successors',
+                'OrderIndex',   //Used to get the State field order index
                 //Customer specific after here. Delete as appropriate
                 'c_ProjectIDOBN',
                 'c_QRWP',
-                'c_RAGStatus'
+                'c_RAGStatus',
+                'c_ProgressUpdate'
             ],
         CARD_DISPLAY_FIELD_LIST:
             [
@@ -83,7 +107,7 @@ Ext.define('CustomApp', {
 
         gApp._initialiseD3();
     console.log('Enter main app');
-        //Get all the nodes and the "Unknown" parent virtual nodes
+        //Get all the nodes
         gApp._nodes = gApp._nodes.concat(gApp._createMyNodes());
         var nodetree = gApp._createTree(gApp._nodes);
 
@@ -110,22 +134,32 @@ Ext.define('CustomApp', {
         svg.attr('viewBox', '0 0 ' + viewBoxSize[0] + ' ' + (viewBoxSize[1]+ gApp.NODE_CIRCLE_SIZE));
 
         gApp._nodeTree = nodetree;      //Save for later
-//        g = svg.append("g")        .attr("transform","translate(10,10)");
-        g = svg.append("g")        .attr("transform","translate(" + gApp.LEFT_MARGIN_SIZE + ",10)");
+        g = svg.append("g")        .attr("transform","translate(" + gApp.LEFT_MARGIN_SIZE + ",10)")
+            .attr("id","tree");
         //For the size, the tree is rotated 90degrees. Height is for top node to deepest child
-        var tree = d3.tree()
-            .size([viewBoxSize[1], viewBoxSize[0] - (columnWidth + gApp.LEFT_MARGIN_SIZE)])     //Take off a chunk for the text??
-//            .size([viewBoxSize[1]-gApp.LEFT_MARGIN_SIZE, viewBoxSize[0] - columnWidth])     //Take off a chunk for the text??
-            .separation( function(a,b) {
-                    return ( a.parent == b.parent ? 1 : 1); //All leaves equi-distant
-                }
-            );
+        var tree = null;
+        if (this.getSetting('keepTypesAligned')) {
+            tree = d3.tree()
+                .size([viewBoxSize[1], viewBoxSize[0] - (columnWidth + (2*gApp.LEFT_MARGIN_SIZE))])     //Take off a chunk for the text??
+                .separation( function(a,b) {
+                        return ( a.parent == b.parent ? 1 : 1); //All leaves equi-distant
+                    }
+                );
+        }
+        else {
+             tree = d3.cluster()
+                .size([viewBoxSize[1], viewBoxSize[0] - (columnWidth + (2*gApp.LEFT_MARGIN_SIZE))])     //Take off a chunk for the text??
+                .separation( function(a,b) {
+                        return ( a.parent == b.parent ? 1 : 1); //All leaves equi-distant
+                    }
+                );
+        }
         tree(nodetree);
         gApp.tree = tree;
         gApp._refreshTree();
     },
     _refreshTree: function(){
-        var g = d3.select('g');
+        var g = d3.select('#tree');
         var nodetree = gApp._nodeTree;
 
          g.selectAll(".link")
@@ -147,38 +181,45 @@ Ext.define('CustomApp', {
         //We're going to set the colour of the dot depndent on some criteria (in this case only in-progress
         node.append("circle")
             .attr("r", gApp.NODE_CIRCLE_SIZE)
-            .attr("class", function (d) {
+            .attr("class", function (d) {   //Work out the individual dot colour
+                var lClass = "dotOutline"; // Might want to use outline to indicate something later
                 if (d.data.record.data.ObjectID){
                     if (!d.data.record.get('State')) return "error--node";      //Not been set - which is an error in itself
-                    switch (d.data.record.get('State').Name) {
-                        case 'Backlog':
-                            return "no--errors--not--started";
-                        case 'Refinement':
-                        case 'In Progress':
-                            return "no--errors--in--progress";
-                        case 'Done':
-                            return "no--errors--done";
-                    }
+                    lClass +=  ' q' + ((d.data.record.get('State').OrderIndex-1) + '-' + gApp._highestOrdinal()); 
                 } else {
                     return d.data.error ? "error--node": "no--errors--done";
                 }
+                return lClass;
             })
-            .on("click", function(node, index, array) { gApp._nodeClick(node,index,array)})
-            .on("mouseover", function(node, index, array) { gApp._nodeMouseOver(node,index,array)})
-            .on("mouseout", function(node, index, array) { gApp._nodeMouseOut(node,index,array)});
+            .on("click", function(node, index, array) { gApp._nodeClick(node,index,array);})
+            .on("mouseover", function(node, index, array) { gApp._nodeMouseOver(node,index,array);})
+            .on("mouseout", function(node, index, array) { gApp._nodeMouseOut(node,index,array);});
 
         node.append("text")
               .attr("dy", 3)
               .attr("visible", false)
-              .attr("x", function(d) { return d.children ? -(gApp.NODE_CIRCLE_SIZE + 5) : (gApp.NODE_CIRCLE_SIZE + 5); })
-              .attr("y", function(d) { return d.children ? -(gApp.NODE_CIRCLE_SIZE + 5): 0; })
+              .attr("x", function(d) { return gApp._textXPos(d);})
+              .attr("y", function(d) { return gApp._textYPos(d);})
 //              .style("text-anchor", "start" )
-              .style("text-anchor",  function(d) { return d.parent ? "start" : "end";})
+              .style("text-anchor",  function(d) { return gApp._textAnchor(d);})
               .text(function(d) {  return d.children?d.data.Name : d.data.Name + ' ' + (d.data.record && d.data.record.data.Name); });
 
         //Now put in, but hide, all the dependency links
-        node.addPredecessors(g.selectAll("circle"));
+//        node.addPredecessors(g.selectAll("circle"));
 //        node.addSuccessors();
+    },
+    _textXPos: function(d){
+        return d.children ? -(gApp.NODE_CIRCLE_SIZE + 5) : (gApp.NODE_CIRCLE_SIZE + 5);
+    },
+
+    _textYPos: function(d){
+        return (d.children  && d.parent) ? -(gApp.NODE_CIRCLE_SIZE + 5) : 0;
+    },
+
+    _textAnchor: function(d){
+//        if (d.children && d.parent) return 'middle';
+        if (!d.children && d. parent) return 'start';
+        return 'end';
     },
 
     _nodeMouseOut: function(node, index,array){
@@ -212,48 +253,258 @@ Ext.define('CustomApp', {
     _nodeClick: function (node,index,array) {
         if (!(node.data.record.data.ObjectID)) return; //Only exists on real items
         //Get ordinal (or something ) to indicate we are the lowest level, then use "UserStories" instead of "Children"
-        var field = node.data.record.data.Children? 'Children' : 'UserStories';
-        var model = node.data.record.data.Children? node.data.record.data.Children._type : 'UserStory';
+        var childField = node.data.record.hasField('Children')? 'Children' : 'UserStories';
+        var model = node.data.record.hasField('Children')? node.data.record.data.Children._type : 'UserStory';
 
         Ext.create('Rally.ui.dialog.Dialog', {
             autoShow: true,
             draggable: true,
             closable: true,
-            width: 600,
+            width: 1400,
+            height: 600,
+                    overflowY: 'scroll',
+                    overflowX: 'none',
+            record: node.data.record,
+            disableScroll: false,
+            model: model,
+            childField: childField,
             title: 'Information for ' + node.data.record.get('FormattedID') + ': ' + node.data.record.get('Name'),
+            layout: 'hbox',
             items: [
                 {
-                        xtype: 'rallycard',
-                        record: node.data.record,
-                        fields: gApp.CARD_DISPLAY_FIELD_LIST,
-                        showAge: true,
-                        resizable: true
+                    xtype: 'container',
+                    itemId: 'leftCol',
+                    width: 400,
                 },
                 {
-                xtype: 'rallypopoverchilditemslistview',
-                target: array[index],
-                record: node.data.record,
-                childField: field,
-                addNewConfig: null,
-                gridConfig: {
-                    title: 'Children of ' + node.data.record.data.FormattedID,
-                    enableEditing: false,
-                    enableRanking: false,
-                    enableBulkEdit: false,
-                    showRowActionsClumn: false,
-                    columnCfgs : [
-                        'FormattedID',
-                        'Name',
-//                        'Owner',
-                        'PercentDoneByStoryCount',
-                        'PercentDoneByStoryPlanEstimate',
-                        'State',
-                        'c_RAGSatus'
-                    ]
+                    xtype: 'container',
+                    itemId: 'middleCol',
+                    width: 400
                 },
-                model: model
-            }]
-        });
+                {
+                    xtype: 'container',
+                    itemId: 'rightCol',
+                    width: 580  //Leave 20 for scroll bar
+                }
+            ],
+            listeners: {
+                afterrender: function() {
+                    this.down('#leftCol').add(
+                        {
+                                xtype: 'rallycard',
+                                record: this.record,
+                                fields: gApp.CARD_DISPLAY_FIELD_LIST,
+                                showAge: true,
+                                resizable: true
+                        }
+                    );
+                    var children = this.down('#middleCol').add(
+
+                        {
+                            xtype: 'rallypopoverchilditemslistview',
+                            target: array[index],
+                            record: this.record,
+                            childField: this.childField,
+                            addNewConfig: null,
+                            gridConfig: {
+                                title: '<b>Children:</b>',
+                                enableEditing: false,
+                                enableRanking: false,
+                                enableBulkEdit: false,
+                                showRowActionsColumn: false,
+                                storeConfig: this.nonRAIDStoreConfig(),
+                                columnCfgs : [
+                                    'FormattedID',
+                                    'Name',
+                                    {
+                                        text: '% By Count',
+                                        dataIndex: 'PercentDoneByStoryCount'
+                                    },
+                                    {
+                                        text: '% By Est',
+                                        dataIndex: 'PercentDoneByStoryPlanEstimate'
+                                    },
+                                    'State',
+                                    'c_RAGSatus',
+                                    'ScheduleState'
+                                ]
+                            },
+                            model: this.model
+                        }
+                    );
+                    children.down('#header').destroy();
+
+                    if ( this.record.get('c_ProgressUpdate')){
+                        this.down('#leftCol').insert(1,
+                            {
+                                xtype: 'component',
+                                width: '100%',
+                                autoScroll: true,
+                                html: this.record.get('c_ProgressUpdate')
+                            }
+                        );
+                        this.down('#leftCol').insert(1,
+                            {
+                                xtype: 'text',
+                                text: 'Progress Update: ',
+                                style: {
+                                    fontSize: '13px',
+                                    textTransform: 'uppercase',
+                                    fontFamily: 'ProximaNova,Helvetica,Arial',
+                                    fontWeight: 'bold'
+                                },
+                                margin: '0 0 10 0'
+                            }
+                        );
+                    }
+                    //This is specific to customer. Features are used as RAIDs as well.
+                    if ((this.record.self.ordinal === 1) && this.record.hasField('c_RAIDType')){
+                        var rai = this.down('#leftCol').add(
+                            {
+                                xtype: 'rallypopoverchilditemslistview',
+                                target: array[index],
+                                record: this.record,
+                                childField: this.childField,
+                                addNewConfig: null,
+                                gridConfig: {
+                                    title: '<b>Risks and Issues:</b>',
+                                    enableEditing: false,
+                                    enableRanking: false,
+                                    enableBulkEdit: false,
+                                    showRowActionsColumn: false,
+                                    storeConfig: this.RAIDStoreConfig(),
+                                    columnCfgs : [
+                                        'FormattedID',
+                                        'Name',
+                                        'c_RAIDType',
+                                        'State',
+                                        'c_RAGStatus',
+                                        'ScheduleState'
+                                    ]
+                                },
+                                model: this.model
+                            }
+                        );
+                        rai.down('#header').destroy();
+                   }
+                    var cfd = Ext.create('Rally.apps.CFDChart', {
+                        record: this.record,
+                        container: this.down('#rightCol')
+                    });
+                    cfd.generateChart();
+
+                    //Now add predecessors and successors
+                    var preds = this.down('#rightCol').add(
+                        {
+                            xtype: 'rallypopoverchilditemslistview',
+                            target: array[index],
+                            record: this.record,
+                            childField: 'Predecessors',
+                            addNewConfig: null,
+                            gridConfig: {
+                                title: '<b>Predecessors:</b>',
+                                enableEditing: false,
+                                enableRanking: false,
+                                enableBulkEdit: false,
+                                showRowActionsColumn: false,
+                                storeConfig: this.RAIDStoreConfig(),
+                                columnCfgs : [
+                                'FormattedID',
+                                'Name',
+                                {
+                                    text: '% By Count',
+                                    dataIndex: 'PercentDoneByStoryCount'
+                                },
+                                {
+                                    text: '% By Est',
+                                    dataIndex: 'PercentDoneByStoryPlanEstimate'
+                                },
+                                'State',
+                                'c_RAGSatus',
+                                'ScheduleState'
+                                ]
+                            },
+                            model: this.model
+                        }
+                    );
+                    preds.down('#header').destroy();
+                    var succs = this.down('#rightCol').add(
+                        {
+                            xtype: 'rallypopoverchilditemslistview',
+                            target: array[index],
+                            record: this.record,
+                            childField: 'Successors',
+                            addNewConfig: null,
+                            gridConfig: {
+                                title: '<b>Successors:</b>',
+                                enableEditing: false,
+                                enableRanking: false,
+                                enableBulkEdit: false,
+                                showRowActionsColumn: false,
+                                storeConfig: this.RAIDStoreConfig(),
+                                columnCfgs : [
+                                'FormattedID',
+                                'Name',
+                                {
+                                    text: '% By Count',
+                                    dataIndex: 'PercentDoneByStoryCount'
+                                },
+                                {
+                                    text: '% By Est',
+                                    dataIndex: 'PercentDoneByStoryPlanEstimate'
+                                },
+                                'State',
+                                'c_RAGSatus',
+                                'ScheduleState'
+                                ]
+                            },
+                            model: this.model
+                        }
+                    );
+                    succs.down('#header').destroy();
+                }
+            },
+
+            //This is specific to customer. Features are used as RAIDs as well.
+            nonRAIDStoreConfig: function() {
+                if (this.record.hasField('c_RAIDType') ){
+                    switch (this.record.self.ordinal) {
+                        case 1:
+                            return  {
+                                filters: {
+                                    property: 'c_RAIDType',
+                                    operator: '=',
+                                    value: ''
+                                }
+                            };
+                        default:
+                            return {};
+                    }
+                }
+                else return {};
+            },
+
+            //This is specific to customer. Features are used as RAIDs as well.
+            RAIDStoreConfig: function() {
+                var retval = {};
+
+                if (this.record.hasField('c_RAIDType') && this.record.hasField('c_RAGStatus')){
+                            return {
+                                filters: [{
+                                    property: 'c_RAIDType',
+                                    operator: '!=',
+                                    value: ''
+                                },
+                                {
+                                    property: 'c_RAGStatus',
+                                    operator: '=',
+                                    value: 'RED'
+                                }]
+                            };
+                    }
+                    else return {};
+                }
+            });
     },
 
     //Entry point after creation of render box
@@ -289,6 +540,98 @@ Ext.define('CustomApp', {
             ]
         });
     },
+    _addColourHelper: function() {
+        var hdrBox = gApp.down('#headerBox');
+        var numColours = gApp._highestOrdinal() + 1;
+        var modelList = gApp._getTypeList(0);  //Get from bottom to top
+
+        //Get the SVG surface and add a new group
+        var svg = d3.select('svg');
+        //Set a size big enough to hold the colour palette (which may get bigger later)
+        var viewBoxSize = [gApp.MIN_COLUMN_WIDTH*numColours, 20 * gApp.MIN_ROW_HEIGHT];
+
+        //Make surface the size available in the viewport (minus the selectors and margins)
+        var rs = this.down('#rootSurface');
+        rs.getEl().setWidth(viewBoxSize[0]);
+        rs.getEl().setHeight(viewBoxSize[1]);
+        //Set the svg area to the surface
+        this._setSVGSize(rs);
+        // Set the view dimensions in svg to match
+        svg.attr('class', 'rootSurface');
+        svg.attr('preserveAspectRatio', 'none');
+        svg.attr('viewBox', '0 0 ' + viewBoxSize[0] + ' ' + (viewBoxSize[1]+ gApp.NODE_CIRCLE_SIZE));
+        var colours = svg.append("g")    //New group for colours
+            .attr("id", "colourLegend")
+            .attr("transform","translate(" + gApp.LEFT_MARGIN_SIZE + ",10)");
+        //Add some legend specific sprites here
+
+        _.each(modelList, function(modeltype, idx) {
+            gApp._addColourBox(modeltype,idx);
+        });
+
+    },
+
+    _addColourBox: function(modeltype, modelNum) {
+//        var colourBox = d3.select('#colourLegend' + modelNum);
+        var colours = d3.select('#colourLegend');
+//        if (!colourBox) {
+            colours.append("g")
+                .attr("id", "colourLegend" + modelNum)
+                .attr("transform","translate(" + (gApp.MIN_COLUMN_WIDTH*modelNum) + ",10)");
+//        }
+        var colourBox = d3.select('#colourLegend' + modelNum);
+            var lCircle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            colourBox.append("text")
+                .attr("dx", -gApp.NODE_CIRCLE_SIZE )
+                .attr("dy", -(gApp.NODE_CIRCLE_SIZE+2))
+                .attr("x",  0)
+                .attr("y", 0)
+//              .style("text-anchor", "start" )
+                .style("text-anchor",  'start')
+                .text(modeltype.Name);
+
+            //Now fetch all the values for the State field
+            //And then add the colours
+            var typeStore = Ext.create('Rally.data.wsapi.Store',
+                {
+                    model: 'State',
+                    filters: [{
+                        property: 'TypeDef',
+                        value: modeltype.ref
+                    },
+                    {
+                        property: 'Enabled',
+                        value: true
+                    }],
+                    context: gApp.getContext().getDataContext(),
+                    fetch: true
+                }
+            );
+            typeStore.load().then({ 
+                success: function(records){
+                            _.each(records, function(state){
+                                var idx = state.get('OrderIndex');
+                                colourBox.append("circle")
+                                    .attr("cx", 0)
+                                    .attr("cy", idx * gApp.MIN_ROW_HEIGHT)    //Leave space for text of name
+                                    .attr("r", gApp.NODE_CIRCLE_SIZE)
+                                    .attr("class", "q" + (state.get('OrderIndex')-1) + '-' + gApp._highestOrdinal());
+                                colourBox.append("text")
+                                    .attr("dx", gApp.NODE_CIRCLE_SIZE+2)
+                                    .attr("dy", gApp.NODE_CIRCLE_SIZE/2)
+                                    .attr("x",0)
+                                    .attr("y",idx * gApp.MIN_ROW_HEIGHT)
+                                    .attr("text-anchor", 'start')
+                                    .text(state.get('Name'));
+                            })
+                        },
+                failure: function(error) {
+                    debugger;
+                }
+            });
+        
+       colours.attr("visibility","hidden");    //Render, but mask it. Use "visible" to show again
+    },
 
     _onFilterReady: function(inlineFilterPanel) {
         gApp.insert(1,inlineFilterPanel);
@@ -320,7 +663,31 @@ Ext.define('CustomApp', {
         if (!gApp._filterPanel){
             gApp._addFilterPanel();
         }
-
+        var hdrBox = gApp.down('#headerBox');
+        var buttonTxt = "Colour Codes"
+        if (!gApp.down('#colourButton')) {
+            hdrBox.add({
+                xtype: 'rallybutton',
+                itemId: 'colourButton',
+                margin: '5 0 5 20',
+                ticked: false,
+                text: buttonTxt,
+                handler: function() {
+                    if (this.ticked === false) {
+                        this.setText('Return');
+                        this.ticked = true;
+                        d3.select("#colourLegend").attr("visibility","visible");
+                        d3.select("#tree").attr("visibility", "hidden");
+                    } else {
+                        this.setText(buttonTxt)
+                        this.ticked = false;
+                        d3.select("#colourLegend").attr("visibility","hidden");
+                        d3.select("#tree").attr("visibility", "visible");
+                    }
+                }
+            });
+            gApp._addColourHelper();
+        }
         gApp._getArtifacts(ptype);
     },
 
@@ -376,7 +743,7 @@ Ext.define('CustomApp', {
         //On re-entry remove all old stuff
         if ( gApp._nodes) gApp._nodes = [];
         if (gApp._nodeTree) {
-            d3.select("g").remove();
+            d3.select("#tree").remove();
             gApp._nodeTree = null;
         }
         //Starting with lowest selected by the combobox, go up
@@ -502,7 +869,7 @@ Ext.define('CustomApp', {
             'local':true
         });
         //Now push some entries to handle "parent-less" artefacts. This should create a 'tree' branch of parentless things
-        _.each(gApp._getTypeList(), function(typedef) {
+        _.each(gApp._getTypeList(gApp._getSelectedOrdinal()+1), function(typedef) {
             nodes.push( { 'Name' : 'Unknown ' + typedef.Name,
                 'record': {
                     'data': {
@@ -582,7 +949,7 @@ Ext.define('CustomApp', {
         _.each(gApp._typeStore.data.items, function(type) {
             //Only push types above that selected
             if (type.data.Ordinal >= lowestOrdinal )
-                piModels.push({ 'type': type.data.TypePath.toLowerCase(), 'Name': type.data.Name});
+                piModels.push({ 'type': type.data.TypePath.toLowerCase(), 'Name': type.data.Name, 'ref': type.data._ref});
         });
         return piModels;
     },
@@ -594,6 +961,20 @@ Ext.define('CustomApp', {
         var model = null;
         _.each(gApp._typeStore.data.items, function(type) { if (number == type.get('Ordinal')) { model = type; } });
         return model && model.get('TypePath');
+    },
+
+    _getSelectedOrdinal: function() {
+        return gApp.down('#piType').lastSelection[0].get('Ordinal')
+    },
+
+    _getOrdFromModel: function(modelName){
+        var model = null;
+        _.each(gApp._typeStore.data.items, function(type) {
+            if (modelName == type.get('TypePath').toLowerCase()) {
+                model = type.get('Ordinal');
+            }
+        });
+        return model;
     },
 
     _createTree: function (nodes) {
