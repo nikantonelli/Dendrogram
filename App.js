@@ -119,7 +119,9 @@ Ext.define('CustomApp', {
         columnWidth = columnWidth > gApp.MIN_COLUMN_WIDTH ? columnWidth : gApp.MIN_COLUMN_WIDTH;
         treeboxHeight = (nodetree.leaves().length +1) * gApp.MIN_ROW_HEIGHT;
 
-        var viewBoxSize = [columnWidth*numColumns, treeboxHeight];
+        var current = gApp.colourBoxSize;
+        var viewBoxSize = [columnWidth*numColumns < current[0]?current[0]:columnWidth*numColumns, 
+                treeboxHeight< current[1]? current[1]: treeboxHeight];
 
         //Make surface the size available in the viewport (minus the selectors and margins)
         var rs = this.down('#rootSurface');
@@ -261,8 +263,8 @@ Ext.define('CustomApp', {
             autoShow: true,
             draggable: true,
             closable: true,
-            width: 1400,
-            height: 600,
+            width: 1100,
+            height: 800,
                     overflowY: 'scroll',
                     overflowX: 'none',
             record: node.data.record,
@@ -275,13 +277,13 @@ Ext.define('CustomApp', {
                 {
                     xtype: 'container',
                     itemId: 'leftCol',
-                    width: 400,
+                    width: 500,
                 },
-                {
-                    xtype: 'container',
-                    itemId: 'middleCol',
-                    width: 400
-                },
+                // {
+//                    xtype: 'container',
+//                    itemId: 'middleCol',
+//                    width: 400
+//                },
                 {
                     xtype: 'container',
                     itemId: 'rightCol',
@@ -299,41 +301,6 @@ Ext.define('CustomApp', {
                                 resizable: true
                         }
                     );
-                    var children = this.down('#middleCol').add(
-
-                        {
-                            xtype: 'rallypopoverchilditemslistview',
-                            target: array[index],
-                            record: this.record,
-                            childField: this.childField,
-                            addNewConfig: null,
-                            gridConfig: {
-                                title: '<b>Children:</b>',
-                                enableEditing: false,
-                                enableRanking: false,
-                                enableBulkEdit: false,
-                                showRowActionsColumn: false,
-                                storeConfig: this.nonRAIDStoreConfig(),
-                                columnCfgs : [
-                                    'FormattedID',
-                                    'Name',
-                                    {
-                                        text: '% By Count',
-                                        dataIndex: 'PercentDoneByStoryCount'
-                                    },
-                                    {
-                                        text: '% By Est',
-                                        dataIndex: 'PercentDoneByStoryPlanEstimate'
-                                    },
-                                    'State',
-                                    'c_RAGSatus',
-                                    'ScheduleState'
-                                ]
-                            },
-                            model: this.model
-                        }
-                    );
-                    children.down('#header').destroy();
 
                     if ( this.record.get('c_ProgressUpdate')){
                         this.down('#leftCol').insert(1,
@@ -388,6 +355,43 @@ Ext.define('CustomApp', {
                         );
                         rai.down('#header').destroy();
                    }
+
+                    var children = this.down('#leftCol').add(
+
+                        {
+                            xtype: 'rallypopoverchilditemslistview',
+                            target: array[index],
+                            record: this.record,
+                            childField: this.childField,
+                            addNewConfig: null,
+                            gridConfig: {
+                                title: '<b>Children:</b>',
+                                enableEditing: false,
+                                enableRanking: false,
+                                enableBulkEdit: false,
+                                showRowActionsColumn: false,
+                                storeConfig: this.nonRAIDStoreConfig(),
+                                columnCfgs : [
+                                    'FormattedID',
+                                    'Name',
+                                    {
+                                        text: '% By Count',
+                                        dataIndex: 'PercentDoneByStoryCount'
+                                    },
+                                    {
+                                        text: '% By Est',
+                                        dataIndex: 'PercentDoneByStoryPlanEstimate'
+                                    },
+                                    'State',
+                                    'c_RAGSatus',
+                                    'ScheduleState'
+                                ]
+                            },
+                            model: this.model
+                        }
+                    );
+                    children.down('#header').destroy();
+
                     var cfd = Ext.create('Rally.apps.CFDChart', {
                         record: this.record,
                         container: this.down('#rightCol')
@@ -542,6 +546,7 @@ Ext.define('CustomApp', {
         });
     },
     numStates: [],
+    colourBoxSize: null,
 
     _addColourHelper: function() {
         var hdrBox = gApp.down('#headerBox');
@@ -551,18 +556,18 @@ Ext.define('CustomApp', {
         //Get the SVG surface and add a new group
         var svg = d3.select('svg');
         //Set a size big enough to hold the colour palette (which may get bigger later)
-        var viewBoxSize = [gApp.MIN_COLUMN_WIDTH*numColours, 20 * gApp.MIN_ROW_HEIGHT];
+        gApp.colourBoxSize = [gApp.MIN_COLUMN_WIDTH*numColours, 10 * gApp.MIN_ROW_HEIGHT];  //Start with 10 states per type
 
         //Make surface the size available in the viewport (minus the selectors and margins)
         var rs = this.down('#rootSurface');
-        rs.getEl().setWidth(viewBoxSize[0]);
-        rs.getEl().setHeight(viewBoxSize[1]);
+        rs.getEl().setWidth(gApp.colourBoxSize[0]);
+        rs.getEl().setHeight(gApp.colourBoxSize[1]);
         //Set the svg area to the surface
         this._setSVGSize(rs);
         // Set the view dimensions in svg to match
         svg.attr('class', 'rootSurface');
         svg.attr('preserveAspectRatio', 'none');
-        svg.attr('viewBox', '0 0 ' + viewBoxSize[0] + ' ' + (viewBoxSize[1]+ gApp.NODE_CIRCLE_SIZE));
+        svg.attr('viewBox', '0 0 ' + gApp.colourBoxSize[0] + ' ' + (gApp.colourBoxSize[1]+ gApp.NODE_CIRCLE_SIZE));
         var colours = svg.append("g")    //New group for colours
             .attr("id", "colourLegend")
             .attr("transform","translate(" + gApp.LEFT_MARGIN_SIZE + ",10)");
