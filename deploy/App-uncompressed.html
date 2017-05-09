@@ -195,7 +195,6 @@
             .attr("class", function (d) {   //Work out the individual dot colour
                 var lClass = "dotOutline"; // Might want to use outline to indicate something later
                 if (d.data.record.data.ObjectID){
-                    debugger;
                     if (!d.data.record.get('State')) return "error--node";      //Not been set - which is an error in itself
                     lClass +=  ' q' + ((d.data.record.get('State').OrderIndex-1) + '-' + gApp.numStates[gApp._getOrdFromModel(d.data.record.get('_type'))]); 
                 } else {
@@ -254,7 +253,17 @@
                     floating: true,
                     shadow: false,
                     showAge: true,
-                    resizable: true
+                    resizable: true,
+                    listeners: {
+                        show: function(card){
+                            //Move card to one side, preferably closer to the centre of the screen
+                            var xpos = array[index].getScreenCTM().e - gApp.MIN_COLUMN_WIDTH;
+                            var ypos = array[index].getScreenCTM().f;
+                            card.el.setLeftTop( (xpos - gApp.MIN_COLUMN_WIDTH) < 0 ? xpos + gApp.MIN_COLUMN_WIDTH : xpos - gApp.MIN_COLUMN_WIDTH, 
+                                (ypos + this.getSize().height)> gApp.getSize().height ? gApp.getSize().height - (this.getSize().height+20) : ypos)  //Tree is rotated
+                        }
+                    }
+
                 });
                 node.card = card;
             }
