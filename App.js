@@ -3,7 +3,8 @@ Ext.define('CustomApp', {
     componentCls: 'app',
     config: {
         defaultSettings: {
-            keepTypesAligned: true
+            keepTypesAligned: true,
+            hideArchived: true
         }
     },
     getSettingsFields: function() {
@@ -56,12 +57,15 @@ Ext.define('CustomApp', {
                 'Notes',
                 'Predecessors',
                 'Successors',
+                'Release',
                 'OrderIndex',   //Used to get the State field order index
                 //Customer specific after here. Delete as appropriate
                 'c_ProjectIDOBN',
                 'c_QRWP',
-                'c_RAGStatus',
-                'c_ProgressUpdate'
+                'c_ProgressUpdate',
+                'c_RAIDSeverityCriticality',
+                'c_RISKProbabilityLevel',
+                'c_RAIDRequestStatus'   
             ],
         CARD_DISPLAY_FIELD_LIST:
             [
@@ -105,7 +109,6 @@ Ext.define('CustomApp', {
     //Continuation point after selectors ready/changed
     _enterMainApp: function() {
 
-        gApp._initialiseD3();
     console.log('Enter main app');
         //Get all the nodes
         gApp._nodes = gApp._nodes.concat(gApp._createMyNodes());
@@ -182,34 +185,82 @@ Ext.define('CustomApp', {
 
         //We're going to set the colour of the dot depndent on some criteria (in this case only in-progress
         node.append("circle")
-            .attr("r", gApp.NODE_CIRCLE_SIZE)
-            .attr("class", function (d) {   //Work out the individual dot colour
-                var lClass = "dotOutline"; // Might want to use outline to indicate something later
+        .attr("r", gApp.NODE_CIRCLE_SIZE)
+        .attr("class", function (d) {   //Work out the individual dot colour
+            var lClass = "dotOutline"; // Might want to use outline to indicate something later
+
+            if ((d.parent !== null) && (d.data.record.data.Parent !== null)) {
+                if (d.data.record.get('PredecessorsAndSuccessors') && d.data.record.get('PredecessorsAndSuccessors').Count > 0) lClass = "gotDependencies";
                 if (d.data.record.data.ObjectID){
                     if (!d.data.record.get('State')) return "error--node";      //Not been set - which is an error in itself
                     lClass +=  ' q' + ((d.data.record.get('State').OrderIndex-1) + '-' + gApp.numStates[gApp._getOrdFromModel(d.data.record.get('_type'))]); 
+                    lClass += gApp._dataCheckForItem(d);
                 } else {
                     return d.data.error ? "error--node": "no--errors--done";
                 }
-                return lClass;
-            })
-            .on("click", function(node, index, array) { gApp._nodeClick(node,index,array);})
-            .on("mouseover", function(node, index, array) { gApp._nodeMouseOver(node,index,array);})
-            .on("mouseout", function(node, index, array) { gApp._nodeMouseOut(node,index,array);});
+            }
+            return lClass;
+        })
+        .on("click", function(node, index, array) { gApp._nodeClick(node,index,array);})
+        .on("mouseover", function(node, index, array) { gApp._nodeMouseOver(node,index,array);})
+        .on("mouseout", function(node, index, array) { gApp._nodeMouseOut(node,index,array);});
 
-        node.append("text")
-              .attr("dy", 3)
-              .attr("visible", false)
-              .attr("x", function(d) { return gApp._textXPos(d);})
-              .attr("y", function(d) { return gApp._textYPos(d);})
-//              .style("text-anchor", "start" )
-              .style("text-anchor",  function(d) { return gApp._textAnchor(d);})
-              .text(function(d) {  return d.children?d.data.Name : d.data.Name + ' ' + (d.data.record && d.data.record.data.Name); });
+    node.append("text")
+          .attr("dy", 3)
+//              .attr("visible", false)
+          .attr('id', function(d) { return 'text' + gApp._getNodeId(d);})
+          .attr("x", function(d) { return gApp._textXPos(d);})
+          .attr("y", function(d) { return gApp._textYPos(d);})
+          .attr("class", function (d) {   //Work out the individual dot colour
+            var lClass = "normalText"; // Might want to use outline to indicate something later
+            var deferred = [];
+            if ((d.parent !== null) && (d.data.record.data.Parent !== null)) {
+                if (d.data.record.get('Successors').Count > 0) {
+                    lClass = "gotSuccText";
+                    deferred.push(d.data.record.getCollection('Successors').load());
+                }
+                if (d.data.record.get('Predecessors').Count > 0) {
+                    lClass = "gotPredText";
+                    deferred.push(d.data.record.getCollection('Predecessors').load());
+                }  
+                if (deferred.length > 0) {
+                    Deft.Promise.all(deferred, gApp).then({
+                        success: function(responses) {
+                            var outOfScope = false;
+                            _.each(responses, function(response) {
+                                _.each(response, function(record){
+                                    if (!gApp._findNode(gApp._nodes, record.data)) {
+                                        outOfScope = true;
+                                    }
+                                });
+                            });
+                            //When you get here, outOfScope will indicate that there are successors or predecessors out of scope
+                            // If true, make the text blink (Note: async callback behaviour means you have to d3.select the item again)
+                            if (outOfScope) {
+                                var lg = d3.select('#text' + gApp._getNodeId(d));
+                                lg.call(function(d) { d.attr('class', 'textBlink ' + d.attr('class'));});
+                            }
+                        },
+                        failure: function(error) {
+                            debugger;
+                        }
+                    });
+                }
+            }
+            return lClass;
+          })
 
-        //Now put in, but hide, all the dependency links
-//        node.addPredecessors(g.selectAll("circle"));
-//        node.addSuccessors();
-    },
+            //              .style("text-anchor", "start" )
+          .style("text-anchor",  function(d) { return gApp._textAnchor(d);})
+          .text(function(d) {  
+              var titleText = d.children?d.data.Name : d.data.Name + ' ' + (d.data.record && d.data.record.data.Name); 
+              if ((d.data.record.data._ref !== 'root') && gApp.getSetting('showExtraText')) {
+                  var prelimName = d.data.record.get('PreliminaryEstimate') ? d.data.record.get('PreliminaryEstimate').Name : 'Unsized!';
+                  titleText += ' (' + d.data.record.get('Project').Name + ' : ' + prelimName + ')';
+              }
+              return titleText;
+            });
+},
     _textXPos: function(d){
         return d.children ? -(gApp.NODE_CIRCLE_SIZE + 5) : (gApp.NODE_CIRCLE_SIZE + 5);
     },
@@ -265,6 +316,14 @@ Ext.define('CustomApp', {
     _nodeClick: function (node,index,array) {
         if (!(node.data.record.data.ObjectID)) return; //Only exists on real items
         //Get ordinal (or something ) to indicate we are the lowest level, then use "UserStories" instead of "Children"
+        if (event.shiftKey) { 
+            gApp._nodePopup(node,index,array); 
+        }  else {
+            gApp._dataPanel(node,index,array);
+        }
+    },
+
+    _dataPanel: function(node, index, array) {        
         var childField = node.data.record.hasField('Children')? 'Children' : 'UserStories';
         var model = node.data.record.hasField('Children')? node.data.record.data.Children._type : 'UserStory';
 
@@ -272,10 +331,13 @@ Ext.define('CustomApp', {
             autoShow: true,
             draggable: true,
             closable: true,
-            width: 1100,
+            width: 1200,
             height: 800,
-                    overflowY: 'scroll',
-                    overflowX: 'none',
+            style: {
+                border: "thick solid #000000"
+            },
+            overflowY: 'scroll',
+            overflowX: 'none',
             record: node.data.record,
             disableScroll: false,
             model: model,
@@ -289,14 +351,14 @@ Ext.define('CustomApp', {
                     width: 500,
                 },
                 // {
-//                    xtype: 'container',
-//                    itemId: 'middleCol',
-//                    width: 400
-//                },
+                //     xtype: 'container',
+                //     itemId: 'middleCol',
+                //     width: 400
+                // },
                 {
                     xtype: 'container',
                     itemId: 'rightCol',
-                    width: 580  //Leave 20 for scroll bar
+                    width: 700  //Leave 20 for scroll bar
                 }
             ],
             listeners: {
@@ -336,6 +398,7 @@ Ext.define('CustomApp', {
                     }
                     //This is specific to customer. Features are used as RAIDs as well.
                     if ((this.record.self.ordinal === 1) && this.record.hasField('c_RAIDType')){
+                        var me = this;
                         var rai = this.down('#leftCol').add(
                             {
                                 xtype: 'rallypopoverchilditemslistview',
@@ -353,9 +416,46 @@ Ext.define('CustomApp', {
                                     columnCfgs : [
                                         'FormattedID',
                                         'Name',
-                                        'c_RAIDType',
-                                        'State',
-                                        'c_RAGStatus',
+                                        {
+                                            text: 'RAID Type',
+                                            dataIndex: 'c_RAIDType',
+                                            minWidth: 80
+                                        },
+                                        'c_RAIDSeverityCriticality',
+                                        {
+                                            text: 'RAG Status',
+                                            dataIndex: 'Release',  //Just so that a sorter gets called on column ordering
+                                            width: 60,
+                                            record: '',
+                                            renderer: function (value, metaData, record, rowIdx, colIdx, store) {
+                                                this.record = record;
+                                                var setColour = (record.get('c_RAIDType') === 'Risk') ?
+                                                        me.RISKColour : me.AIDColour;
+                                                
+                                                    return '<div ' + 
+                                                        'class="' + setColour(
+                                                                        record.get('c_RAIDSeverityCriticality'),
+                                                                        record.get('c_RISKProbabilityLevel'),
+                                                                        record.get('c_RAIDRequestStatus')   
+                                                                    ) + 
+                                                        '"' +
+                                                        '>&nbsp</div>';
+                                            },
+                                            listeners: {
+                                                mouseover: function(gridView,cell,rowIdx,cellIdx,event,record) { 
+//                                                    debugger;
+                                                    Ext.create('Rally.ui.tooltip.ToolTip' , {
+                                                            target: cell,
+                                                            html:   
+                                                            '<p>' + '   Severity: ' + record.get('c_RAIDSeverityCriticality') + '</p>' +
+                                                            '<p>' + 'Probability: ' + record.get('c_RISKProbabilityLevel') + '</p>' +
+                                                            '<p>' + '     Status: ' + record.get('c_RAIDRequestStatus') + '</p>' 
+                                                        });
+                                                    
+                                                    return true;    //Continue processing for popover
+                                                }
+                                            }
+                                        },
                                         'ScheduleState'
                                     ]
                                 },
@@ -364,9 +464,7 @@ Ext.define('CustomApp', {
                         );
                         rai.down('#header').destroy();
                    }
-
-                    var children = this.down('#leftCol').add(
-
+                    var children = this.down('#rightCol').add(
                         {
                             xtype: 'rallypopoverchilditemslistview',
                             target: array[index],
@@ -391,7 +489,25 @@ Ext.define('CustomApp', {
                                         text: '% By Est',
                                         dataIndex: 'PercentDoneByStoryPlanEstimate'
                                     },
+                                    {
+                                        text: 'Timebox',
+                                        dataIndex: 'Project',  //Just so that the renderer gets called
+                                        minWidth: 80,
+                                        renderer: function (value, metaData, record, rowIdx, colIdx, store) {
+                                            var retval = '';
+                                                if (record.hasField('Iteration')) {
+                                                    retval = record.get('Iteration')?record.get('Iteration').Name:'NOT PLANNED';
+                                                } else if (record.hasField('Release')) {
+                                                    retval = record.get('Release')?record.get('Release').Name:'NOT PLANNED';
+                                                } else if (record.hasField('PlannedStartDate')){
+                                                    retval = Ext.Date.format(record.get('PlannedStartDate'), 'd/M/Y') + ' - ' + Ext.Date.format(record.get('PlannedEndDate'), 'd/M/Y');
+                                                }
+                                            return (retval);
+                                        }
+                                    },
                                     'State',
+                                    'PredecessorsAndSuccessors',
+                                    'Project',
                                     'c_RAGSatus',
                                     'ScheduleState'
                                 ]
@@ -408,74 +524,72 @@ Ext.define('CustomApp', {
                     cfd.generateChart();
 
                     //Now add predecessors and successors
-                    var preds = this.down('#rightCol').add(
-                        {
-                            xtype: 'rallypopoverchilditemslistview',
-                            target: array[index],
-                            record: this.record,
-                            childField: 'Predecessors',
-                            addNewConfig: null,
-                            gridConfig: {
-                                title: '<b>Predecessors:</b>',
-                                enableEditing: false,
-                                enableRanking: false,
-                                enableBulkEdit: false,
-                                showRowActionsColumn: false,
-                                storeConfig: this.RAIDStoreConfig(),
-                                columnCfgs : [
-                                'FormattedID',
-                                'Name',
-                                {
-                                    text: '% By Count',
-                                    dataIndex: 'PercentDoneByStoryCount'
-                                },
-                                {
-                                    text: '% By Est',
-                                    dataIndex: 'PercentDoneByStoryPlanEstimate'
-                                },
-                                'State',
-                                'c_RAGSatus',
-                                'ScheduleState'
-                                ]
-                            },
-                            model: this.model
-                        }
-                    );
-                    preds.down('#header').destroy();
-                    var succs = this.down('#rightCol').add(
-                        {
-                            xtype: 'rallypopoverchilditemslistview',
-                            target: array[index],
-                            record: this.record,
-                            childField: 'Successors',
-                            addNewConfig: null,
-                            gridConfig: {
-                                title: '<b>Successors:</b>',
-                                enableEditing: false,
-                                enableRanking: false,
-                                enableBulkEdit: false,
-                                showRowActionsColumn: false,
-                                storeConfig: this.RAIDStoreConfig(),
-                                columnCfgs : [
-                                'FormattedID',
-                                'Name',
-                                {
-                                    text: '% By Count',
-                                    dataIndex: 'PercentDoneByStoryCount'
-                                },
-                                {
-                                    text: '% By Est',
-                                    dataIndex: 'PercentDoneByStoryPlanEstimate'
-                                },
-                                'State',
-                                'c_RAGSatus',
-                                'ScheduleState'
-                                ]
-                            },
-                            model: this.model
-                        }
-                    );
-                    succs.down('#header').destroy();
+                //     var preds = this.down('#rightCol').add(
+                //         {
+                //             xtype: 'rallypopoverchilditemslistview',
+                //             target: array[index],
+                //             record: this.record,
+                //             childField: 'Predecessors',
+                //             addNewConfig: null,
+                //             gridConfig: {
+                //                 title: '<b>Predecessors:</b>',
+                //                 enableEditing: false,
+                //                 enableRanking: false,
+                //                 enableBulkEdit: false,
+                //                 showRowActionsColumn: false,
+                //                 columnCfgs : [
+                //                 'FormattedID',
+                //                 'Name',
+                //                 {
+                //                     text: '% By Count',
+                //                     dataIndex: 'PercentDoneByStoryCount'
+                //                 },
+                //                 {
+                //                     text: '% By Est',
+                //                     dataIndex: 'PercentDoneByStoryPlanEstimate'
+                //                 },
+                //                 'State',
+                //                 'c_RAGSatus',
+                //                 'ScheduleState'
+                //                 ]
+                //             },
+                //             model: this.model
+                //         }
+                //     );
+                //     preds.down('#header').destroy();
+                //     var succs = this.down('#rightCol').add(
+                //         {
+                //             xtype: 'rallypopoverchilditemslistview',
+                //             target: array[index],
+                //             record: this.record,
+                //             childField: 'Successors',
+                //             addNewConfig: null,
+                //             gridConfig: {
+                //                 title: '<b>Successors:</b>',
+                //                 enableEditing: false,
+                //                 enableRanking: false,
+                //                 enableBulkEdit: false,
+                //                 showRowActionsColumn: false,
+                //                 columnCfgs : [
+                //                 'FormattedID',
+                //                 'Name',
+                //                 {
+                //                     text: '% By Count',
+                //                     dataIndex: 'PercentDoneByStoryCount'
+                //                 },
+                //                 {
+                //                     text: '% By Est',
+                //                     dataIndex: 'PercentDoneByStoryPlanEstimate'
+                //                 },
+                //                 'State',
+                //                 'c_RAGSatus',
+                //                 'ScheduleState'
+                //                 ]
+                //             },
+                //             model: this.model
+                //         }
+                //     );
+                //     succs.down('#header').destroy();
                 }
             },
 
@@ -489,36 +603,100 @@ Ext.define('CustomApp', {
                                     property: 'c_RAIDType',
                                     operator: '=',
                                     value: ''
-                                }
+                                },
+                                fetch: gApp.STORE_FETCH_FIELD_LIST,
+                                pageSize: 50
                             };
                         default:
-                            return {};
+                            return {
+                                fetch: gApp.STORE_FETCH_FIELD_LIST                                
+                            };
                     }
                 }
-                else return {};
+                else return {
+                    fetch: gApp.STORE_FETCH_FIELD_LIST                                                    
+                };
             },
 
             //This is specific to customer. Features are used as RAIDs as well.
             RAIDStoreConfig: function() {
                 var retval = {};
 
-                if (this.record.hasField('c_RAIDType') && this.record.hasField('c_RAGStatus')){
+                if (this.record.hasField('c_RAIDType')){
                             return {
                                 filters: [{
                                     property: 'c_RAIDType',
                                     operator: '!=',
                                     value: ''
-                                },
-                                {
-                                    property: 'c_RAGStatus',
-                                    operator: '=',
-                                    value: 'RED'
-                                }]
+                                }],
+                                fetch: gApp.STORE_FETCH_FIELD_LIST,
+                                pageSize: 50
                             };
                     }
-                    else return {};
+                else return {};
+            },
+
+            RISKColour: function(severity, probability, state) {
+                if ( state === 'Closed' || state === 'Cancelled') {
+                    return 'RAID-blue';
                 }
-            });
+
+                if (severity === 'Exceptional') {
+                    return 'RAID-red textBlink';
+                }
+
+                if (severity ==='High' && (probability === 'Likely' || probability === 'Certain'))
+                {
+                    return 'RAID-red';
+                }
+
+                if (
+                    (severity ==='High' && (probability === 'Unlikely' || probability === 'Possible')) ||
+                    (state ==='Moderate' && (probability === 'Likely' || probability === 'Certain'))
+                ){
+                    return 'RAID-amber';
+                }
+                if (
+                    (severity ==='Moderate' && (probability === 'Unlikely' || probability === 'Possible')) ||
+                    (state ==='Low')
+                ){
+                    return 'RAID-green';
+                }
+                
+                var lClass = 'RAID-missing';
+                if (!severity) lClass += '-severity';
+                if (!probability) lClass += '-probability';
+
+                return lClass;
+            },
+
+            AIDColour: function(severity, probability, state) {
+                if ( state === 'Closed' || state === 'Cancelled') {
+                    return 'RAID-blue';
+                }
+
+                if (severity === 'Exceptional') 
+                {
+                    return 'RAID-red';
+                }
+
+                if (severity === 'High') 
+                {
+                    return 'RAID-amber';
+                }
+
+                if ((severity === 'Moderate') ||
+                    (severity === 'Low')
+                ){
+                    return 'RAID-green';                    
+                }
+                return 'RAID-missing-severity-probability'; //Mark as unknown
+            }
+        });
+    },
+
+    _dataCheckForItem: function(d){
+        return "";
     },
 
     //Entry point after creation of render box
@@ -1008,44 +1186,18 @@ Ext.define('CustomApp', {
                     (nodes);
         return nodetree;
     },
+
+    _getNodeId: function(d){
+        return ((d.parent !== null) && (d.data.record.data.Parent !== null)) ?
+            d.data.record.get('FormattedID') : Ext.id();
+    },
+
     launch: function() {
         //API Docs: https://help.rallydev.com/apps/2.1/doc/
     },
-
-    _initialiseD3: function() {
-        d3.selection.prototype.addPredecessors = function  (nodes) {
-            return this.each(function(node, index, array) {
-                var record = node.data.record;
-                if (record.data.ObjectID && record.get('Predecessors').Count) {    //Only real ones have this
-                    record.getCollection('Predecessors').load().then({
-                        success: function(preds) {
-                            _.each(preds, function(pred){
-                            debugger;
-                                var pn = _.find(nodes.nodes, function(d) {
-                                    return d.data.record && (d.data.record.data._ref === pred.get('_ref'));
-                                });
-                                pn.append("path")
-                                    .attr("class", "predecessor--link")
-                                    .attr("d", function(d) {
-                                        return "M" + d.y + "," + d.x
-                                            + "C" + (node.y + 100) + "," + d.x
-                                            + " " + (node.y + 100) + "," + node.x
-                                            + " " + node.y + "," + node.x;
-                                })
-
-                            });
-                        },
-                        failure: function(error) {
-                            debugger;
-                        }
-                    });
-                }
-            });
-        }
-        d3.selection.prototype.addSuccessors = function  () {
-            return this.each(function(node, index, array) {
-                debugger;
-            });
-        }
-    }
 });
+
+function popOver() {
+    debugger;
+
+}
