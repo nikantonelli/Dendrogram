@@ -83,7 +83,8 @@ Ext.define('CustomApp', {
                 'c_ProgressUpdate',
                 'c_RAIDSeverityCriticality',
                 'c_RISKProbabilityLevel',
-                'c_RAIDRequestStatus'   
+                'c_RAIDRequestStatus',
+                'c_RAIDDueDate'   
             ],
         CARD_DISPLAY_FIELD_LIST:
             [
@@ -368,7 +369,7 @@ Ext.define('CustomApp', {
                 {
                     xtype: 'container',
                     itemId: 'leftCol',
-                    width: 500,
+                    width: 550,
                 },
                 // {
                 //     xtype: 'container',
@@ -378,7 +379,7 @@ Ext.define('CustomApp', {
                 {
                     xtype: 'container',
                     itemId: 'rightCol',
-                    width: 700  //Leave 20 for scroll bar
+                    width: 650  //Leave 20 for scroll bar
                 }
             ],
             listeners: {
@@ -439,9 +440,13 @@ Ext.define('CustomApp', {
                                         {
                                             text: 'RAID Type',
                                             dataIndex: 'c_RAIDType',
-                                            minWidth: 80
+                                            width: 80
                                         },
-                                        'c_RAIDSeverityCriticality',
+                                        {
+                                            dataIndex: 'c_RAIDDueDate',
+                                            text: 'Due Date',
+                                            width: 80
+                                        },
                                         {
                                             text: 'RAG Status',
                                             dataIndex: 'Release',  //Just so that a sorter gets called on column ordering
