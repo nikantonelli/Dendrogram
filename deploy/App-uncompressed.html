@@ -342,6 +342,15 @@
             node.card.show();
         }
     },
+    
+    _nodePopup: function(node, index, array) {
+        var popover = Ext.create('Rally.ui.popover.DependenciesPopover',
+            {
+                record: node.data.record,
+                target: node.card.el
+            }
+        );
+    },
 
     _nodeClick: function (node,index,array) {
         if (!(node.data.record.data.ObjectID)) return; //Only exists on real items
@@ -475,15 +484,16 @@
                                             },
                                             listeners: {
                                                 mouseover: function(gridView,cell,rowIdx,cellIdx,event,record) { 
-//                                                    debugger;
-                                                    Ext.create('Rally.ui.tooltip.ToolTip' , {
+                                                    if (!cell.tooltip) {
+                                                        cell.tooltip = Ext.create('Rally.ui.tooltip.ToolTip' , {
                                                             target: cell,
+                                                            autoShow: true,
                                                             html:   
                                                             '<p>' + '   Severity: ' + record.get('c_RAIDSeverityCriticality') + '</p>' +
                                                             '<p>' + 'Probability: ' + record.get('c_RISKProbabilityLevel') + '</p>' +
                                                             '<p>' + '     Status: ' + record.get('c_RAIDRequestStatus') + '</p>' 
                                                         });
-                                                    
+                                                    }
                                                     return true;    //Continue processing for popover
                                                 }
                                             }
@@ -559,50 +569,48 @@
 
             //This is specific to customer. Features are used as RAIDs as well.
             nonRAIDStoreConfig: function() {
-                if (this.record.hasField('c_RAIDType') ){
-                    switch (this.record.self.ordinal) {
-                        case 1:
-                            return  {
-                                filters: {
-                                    property: 'c_RAIDType',
-                                    operator: '=',
-                                    value: ''
-                                },
-                                fetch: gApp.STORE_FETCH_FIELD_LIST,
-                                pageSize: 50
-                            };
-                        default:
-                            return {
-                                fetch: gApp.STORE_FETCH_FIELD_LIST,
-                                pageSize: 50
-                            };
-                    }
-                }
-                else return {
+                var retval = {
                     fetch: gApp.STORE_FETCH_FIELD_LIST,
                     pageSize: 50
                 };
+
+                if (this.record.hasField('c_RAIDType') ){
+                    switch (this.record.self.ordinal) { //Switch statement used in case we want different plans for each portfolio level
+                        case 1:
+                            retval.filters = {
+                                    property: 'c_RAIDType',
+                                    operator: '=',
+                                    value: ''
+                                }
+                            break;
+                        default:
+                            break;
+                    }
+                }
+                return retval;
             },
 
             //This is specific to customer. Features are used as RAIDs as well.
             RAIDStoreConfig: function() {
-                var retval = {};
-
-                if (this.record.hasField('c_RAIDType')){
-                            return {
-                                filters: [{
-                                    property: 'c_RAIDType',
-                                    operator: '!=',
-                                    value: ''
-                                }],
-                                fetch: gApp.STORE_FETCH_FIELD_LIST,
-                                pageSize: 50
-                            };
-                    }
-                else return {
+                var retval = {
                     fetch: gApp.STORE_FETCH_FIELD_LIST,
                     pageSize: 50
                 };
+
+                if (this.record.hasField('c_RAIDType') ){
+                    switch (this.record.self.ordinal) { //Switch statement used in case we want different plans for each portfolio level
+                        case 1:
+                            retval.filters = {
+                                    property: 'c_RAIDType',
+                                    operator: '!=',
+                                    value: ''
+                                }
+                            break;
+                        default:
+                            break;
+                    }
+                }
+                return retval;
             },
 
             RISKColour: function(severity, probability, state) {
@@ -883,7 +891,7 @@
                                 '<p>The edge of the circle will be red if there are any dependencies (predecessors or successors) and the colour ' +
                                 'of the associated text will indicate those with predecessors (red text) and those with successors (green text). ' +
                                 'Those with both will appear as having predecessors</p>' +
-                                '<p>If the text is blinking, it means that the relevant dependency is not being shown in this data set. </p>' +
+                                '<p>If the text is blinking, it means that the relevant dependency is not being shown in this (selected/filtered) data set. </p>' +
                                 '<p class="boldText">Exploring the data</p><p>You can investigate dependencies by using &lt;shift&gt;-Click ' +
                                 'on the circle. This will call up an overlay with the relevant dependencies. Clicking on the FormattedID on any' +
                                 ' artefact in the overlay will take you to it in either the EDP or QDP page (whichever you have enabled for your' +
@@ -1030,7 +1038,13 @@
                 model: modelName,
                 limit: 20000,
                 fetch:  gApp.STORE_FETCH_FIELD_LIST,
-                filters: []
+                filters: [],
+                sorters: [
+                    {
+                        property: 'Rank',
+                        direction: 'ASC'
+                    }
+                ]
             };
         if (gApp._filterInfo && gApp._filterInfo.filters.length) {
             storeConfig.filters = gApp._filterInfo.filters;
@@ -1059,7 +1073,13 @@
                 workspace: gApp.getContext().getWorkspaceRef(),
                 project: null
             },
-            fetch:  gApp.STORE_FETCH_FIELD_LIST
+            fetch:  gApp.STORE_FETCH_FIELD_LIST,
+            sorters: [
+                {
+                    property: 'Rank',
+                    direction: 'ASC'
+                }
+            ]
         };
         while (parents.length) {
             var wConf = Ext.clone(config);
