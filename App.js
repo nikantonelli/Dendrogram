@@ -882,7 +882,9 @@ Ext.define('CustomApp', {
                                 '<p>The edge of the circle will be red if there are any dependencies (predecessors or successors) and the colour ' +
                                 'of the associated text will indicate those with predecessors (red text) and those with successors (green text). ' +
                                 'Those with both will appear as having predecessors</p>' +
-                                '<p>If the text is blinking, it means that the relevant dependency is not being shown in this (selected/filtered) data set. </p>' +
+                                '<p>If the text is blinking, it means that the relevant dependency is not being shown in this (selected/filtered) data set. ' + 
+                                ' NOTE: If two parents have a dependency between them and one of them has no child items of the type selected, the items will also blink ' +
+                                ' (false positive) even if they are in the same node.</p>' +
                                 '<p class="boldText">Exploring the data</p><p>You can investigate dependencies by using &lt;shift&gt;-Click ' +
                                 'on the circle. This will call up an overlay with the relevant dependencies. Clicking on the FormattedID on any' +
                                 ' artefact in the overlay will take you to it in either the EDP or QDP page (whichever you have enabled for your' +
