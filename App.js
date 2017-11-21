@@ -4,6 +4,7 @@ Ext.define('CustomApp', {
     config: {
         defaultSettings: {
             keepTypesAligned: true,
+            showFilter: true,
             hideArchived: true
         }
     },
@@ -19,6 +20,18 @@ Ext.define('CustomApp', {
             name: 'hideArchived',
             xtype: 'rallycheckboxfield',
             fieldLabel: 'Hide Archived',
+            labelAlign: 'top'
+        },
+        {
+            name: 'showExtraText',
+            xtype: 'rallycheckboxfield',
+            fieldLabel: 'Add Project and Prelim Size to titles',
+            labelAlign: 'top'
+        },
+        {
+            xtype: 'rallycheckboxfield',
+            fieldLabel: 'Show Advanced filter',
+            name: 'showFilter',
             labelAlign: 'top'
         }
         ];
@@ -51,14 +64,19 @@ Ext.define('CustomApp', {
                 'CreationDate',
                 'PercentDoneByStoryCount',
                 'PercentDoneByStoryPlanEstimate',
+                'PredecessorsAndSuccessors',                
                 'State',
                 'PreliminaryEstimate',
                 'Description',
                 'Notes',
                 'Predecessors',
                 'Successors',
-                'Release',
                 'OrderIndex',   //Used to get the State field order index
+                'PortfolioItemType',                
+                'Ordinal',
+                'Release',
+                'Iteration',
+                'Milestones',
                 //Customer specific after here. Delete as appropriate
                 'c_ProjectIDOBN',
                 'c_QRWP',
@@ -76,10 +94,12 @@ Ext.define('CustomApp', {
                 'Project',
                 'PercentDoneByStoryCount',
                 'PercentDoneByStoryPlanEstimate',
+                'PredecessorsAndSuccessors',                
                 'State',
+                'Milestones',
+                //Customer specific after here. Delete as appropriate
                 'c_ProjectIDOBN',
-                'c_QRWP',
-                'c_RAGStatus'
+                'c_QRWP'
 
             ],
 
@@ -107,9 +127,9 @@ Ext.define('CustomApp', {
     },
     _nodeTree: null,
     //Continuation point after selectors ready/changed
+
     _enterMainApp: function() {
 
-    console.log('Enter main app');
         //Get all the nodes
         gApp._nodes = gApp._nodes.concat(gApp._createMyNodes());
         var nodetree = gApp._createTree(gApp._nodes);
@@ -426,9 +446,7 @@ Ext.define('CustomApp', {
                                             text: 'RAG Status',
                                             dataIndex: 'Release',  //Just so that a sorter gets called on column ordering
                                             width: 60,
-                                            record: '',
                                             renderer: function (value, metaData, record, rowIdx, colIdx, store) {
-                                                this.record = record;
                                                 var setColour = (record.get('c_RAIDType') === 'Risk') ?
                                                         me.RISKColour : me.AIDColour;
                                                 
@@ -469,6 +487,7 @@ Ext.define('CustomApp', {
                             xtype: 'rallypopoverchilditemslistview',
                             target: array[index],
                             record: this.record,
+                            width: '95%',
                             childField: this.childField,
                             addNewConfig: null,
                             gridConfig: {
@@ -507,8 +526,6 @@ Ext.define('CustomApp', {
                                     },
                                     'State',
                                     'PredecessorsAndSuccessors',
-                                    'Project',
-                                    'c_RAGSatus',
                                     'ScheduleState'
                                 ]
                             },
@@ -523,73 +540,6 @@ Ext.define('CustomApp', {
                     });
                     cfd.generateChart();
 
-                    //Now add predecessors and successors
-                //     var preds = this.down('#rightCol').add(
-                //         {
-                //             xtype: 'rallypopoverchilditemslistview',
-                //             target: array[index],
-                //             record: this.record,
-                //             childField: 'Predecessors',
-                //             addNewConfig: null,
-                //             gridConfig: {
-                //                 title: '<b>Predecessors:</b>',
-                //                 enableEditing: false,
-                //                 enableRanking: false,
-                //                 enableBulkEdit: false,
-                //                 showRowActionsColumn: false,
-                //                 columnCfgs : [
-                //                 'FormattedID',
-                //                 'Name',
-                //                 {
-                //                     text: '% By Count',
-                //                     dataIndex: 'PercentDoneByStoryCount'
-                //                 },
-                //                 {
-                //                     text: '% By Est',
-                //                     dataIndex: 'PercentDoneByStoryPlanEstimate'
-                //                 },
-                //                 'State',
-                //                 'c_RAGSatus',
-                //                 'ScheduleState'
-                //                 ]
-                //             },
-                //             model: this.model
-                //         }
-                //     );
-                //     preds.down('#header').destroy();
-                //     var succs = this.down('#rightCol').add(
-                //         {
-                //             xtype: 'rallypopoverchilditemslistview',
-                //             target: array[index],
-                //             record: this.record,
-                //             childField: 'Successors',
-                //             addNewConfig: null,
-                //             gridConfig: {
-                //                 title: '<b>Successors:</b>',
-                //                 enableEditing: false,
-                //                 enableRanking: false,
-                //                 enableBulkEdit: false,
-                //                 showRowActionsColumn: false,
-                //                 columnCfgs : [
-                //                 'FormattedID',
-                //                 'Name',
-                //                 {
-                //                     text: '% By Count',
-                //                     dataIndex: 'PercentDoneByStoryCount'
-                //                 },
-                //                 {
-                //                     text: '% By Est',
-                //                     dataIndex: 'PercentDoneByStoryPlanEstimate'
-                //                 },
-                //                 'State',
-                //                 'c_RAGSatus',
-                //                 'ScheduleState'
-                //                 ]
-                //             },
-                //             model: this.model
-                //         }
-                //     );
-                //     succs.down('#header').destroy();
                 }
             },
 
@@ -609,12 +559,14 @@ Ext.define('CustomApp', {
                             };
                         default:
                             return {
-                                fetch: gApp.STORE_FETCH_FIELD_LIST                                
+                                fetch: gApp.STORE_FETCH_FIELD_LIST,
+                                pageSize: 50
                             };
                     }
                 }
                 else return {
-                    fetch: gApp.STORE_FETCH_FIELD_LIST                                                    
+                    fetch: gApp.STORE_FETCH_FIELD_LIST,
+                    pageSize: 50
                 };
             },
 
@@ -633,7 +585,10 @@ Ext.define('CustomApp', {
                                 pageSize: 50
                             };
                     }
-                else return {};
+                else return {
+                    fetch: gApp.STORE_FETCH_FIELD_LIST,
+                    pageSize: 50
+                };
             },
 
             RISKColour: function(severity, probability, state) {
@@ -856,16 +811,13 @@ Ext.define('CustomApp', {
         var ptype = gApp.down('#piType');
         gApp._typeStore = ptype.store;
 
-        if (!gApp._filterPanel){
-            gApp._addFilterPanel();
-        }
         var hdrBox = gApp.down('#headerBox');
         var buttonTxt = "Colour Codes"
         if (!gApp.down('#colourButton')) {
             hdrBox.add({
                 xtype: 'rallybutton',
                 itemId: 'colourButton',
-                margin: '5 0 5 20',
+                margin: '10 0 5 20',
                 ticked: false,
                 text: buttonTxt,
                 handler: function() {
@@ -884,6 +836,61 @@ Ext.define('CustomApp', {
             });
             gApp._addColourHelper();
         }
+
+        if (!gApp.down('#infoButton')){
+                hdrBox.add( {
+                xtype: 'rallybutton',
+                itemId: 'infoButton',
+                margin: '10 0 5 20',
+                align: 'right',
+                text: 'Page Info',
+                handler: function() {
+                    Ext.create('Rally.ui.dialog.Dialog', {
+                        autoShow: true,
+                        draggable: true,
+                        closable: true,
+                        width: 500,
+                        autoScroll: true,
+                        maxHeight: 600,
+                        title: 'Information about this app',
+                        items: {
+                            xtype: 'component',
+                            html: 
+                                '<p class="boldText">Bottom-Up Tree View</p>' +
+                                '<p>This app will find all the items of a particular Portfolio artefact typein your chosen node,' +
+                                ' then traverse up the parentage to the top level artefact.</p>' +
+                                '<p>The colours of the circles indicate the state of progress from red (those that are not started), through to' +
+                                ' blue (in their final stages). Click on the "Colour Codes" button to see the colour to state mapping for each' +
+                                ' portfolio item type.</p>' +
+                                '<p class="boldText">Incomplete Parentage</p>' +
+                                '<p>It is considered good practice to have all of the lowest level of portfolio items connected to a parent that is connected to a parent,' +
+                                ' and so on up the tree, so that you can keep a view of all the things your organsiation is doing and why</p>' +
+                                '<p class="boldText">Visualising Dependencies</p>' +
+                                '<p>The edge of the circle will be red if there are any dependencies (predecessors or successors) and the colour ' +
+                                'of the associated text will indicate those with predecessors (red text) and those with successors (green text). ' +
+                                'Those with both will appear as having predecessors</p>' +
+                                '<p>If the text is blinking, it means that the relevant dependency is not being shown in this data set. </p>' +
+                                '<p class="boldText">Exploring the data</p><p>You can investigate dependencies by using &lt;shift&gt;-Click ' +
+                                'on the circle. This will call up an overlay with the relevant dependencies. Clicking on the FormattedID on any' +
+                                ' artefact in the overlay will take you to it in either the EDP or QDP page (whichever you have enabled for your' +
+                                ' session )</p>' +
+                                '<p>If you click on the circle without using shift, then a data panel will appear containing more information about that artefact</p>' +
+                               '<p class="boldText">Filtering</p>' +
+                               '<p>There are app settings to enable the extra filtering capabilities on the main page, so that you can choose which lowest-level portfolio items to see' +
+                               ' e.g. filter on Owner, Investment Type, etc. </p><p>To filter by release (e.g. to find all those features scheduled into a Program Increment)' +
+                               ' you will need to edit the Page settings (not the App Settings) to add a Release or Milestone filter</p>' +
+                                '<p>Source code available here: <br/><a href=https://github.com/nikantonelli/Dendogram> Github Repo</a></p>',
+                            padding: 10
+                        }
+                    });
+                }
+            } );
+        }
+
+        if (!gApp._filterPanel){
+            gApp._addFilterPanel();
+        }
+
         gApp._getArtifacts(ptype);
     },
 
@@ -1008,12 +1015,22 @@ Ext.define('CustomApp', {
             {
                 model: modelName,
                 limit: 20000,
-                fetch:  gApp.STORE_FETCH_FIELD_LIST
+                fetch:  gApp.STORE_FETCH_FIELD_LIST,
+                filters: []
             };
         if (gApp._filterInfo && gApp._filterInfo.filters.length) {
             storeConfig.filters = gApp._filterInfo.filters;
             storeConfig.models = gApp._filterInfo.types;
         }
+
+        if (gApp.getSetting('hideArchived')) {
+            storeConfig.filters.push({
+                property: 'Archived',
+                operator: '=',
+                value: false
+            });
+        }
+
         var store = Ext.create('Rally.data.wsapi.Store', storeConfig);
         return store.load();
     },
@@ -1196,8 +1213,3 @@ Ext.define('CustomApp', {
         //API Docs: https://help.rallydev.com/apps/2.1/doc/
     },
 });
-
-function popOver() {
-    debugger;
-
-}
