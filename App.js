@@ -1,3 +1,7 @@
+(function () {
+    var Ext = window.Ext4 || window.Ext;
+    var gApp = null;
+
 Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
@@ -141,7 +145,7 @@ Ext.define('CustomApp', {
         var numColumns = (gApp._highestOrdinal()+1); //Leave extras for offset at left and text at right
         var columnWidth = this.getSize().width/numColumns;
         columnWidth = columnWidth > gApp.MIN_COLUMN_WIDTH ? columnWidth : gApp.MIN_COLUMN_WIDTH;
-        treeboxHeight = (nodetree.leaves().length +1) * gApp.MIN_ROW_HEIGHT;
+        var treeboxHeight = (nodetree.leaves().length +1) * gApp.MIN_ROW_HEIGHT;
 
         var current = gApp.colourBoxSize;
         var viewBoxSize = [columnWidth*numColumns < current[0]?current[0]:columnWidth*numColumns, 
@@ -160,7 +164,7 @@ Ext.define('CustomApp', {
         svg.attr('viewBox', '0 0 ' + viewBoxSize[0] + ' ' + (viewBoxSize[1]+ gApp.NODE_CIRCLE_SIZE));
 
         gApp._nodeTree = nodetree;      //Save for later
-        g = svg.append("g")        .attr("transform","translate(" + gApp.LEFT_MARGIN_SIZE + ",10)")
+        svg.append("g")        .attr("transform","translate(" + gApp.LEFT_MARGIN_SIZE + ",10)")
             .attr("id","tree");
         //For the size, the tree is rotated 90degrees. Height is for top node to deepest child
         var tree = null;
@@ -168,7 +172,7 @@ Ext.define('CustomApp', {
             tree = d3.tree()
                 .size([viewBoxSize[1], viewBoxSize[0] - (columnWidth + (2*gApp.LEFT_MARGIN_SIZE))])     //Take off a chunk for the text??
                 .separation( function(a,b) {
-                        return ( a.parent == b.parent ? 1 : 1); //All leaves equi-distant
+                        return ( a.parent === b.parent ? 1 : 1); //All leaves equi-distant
                     }
                 );
         }
@@ -176,7 +180,7 @@ Ext.define('CustomApp', {
              tree = d3.cluster()
                 .size([viewBoxSize[1], viewBoxSize[0] - (columnWidth + (2*gApp.LEFT_MARGIN_SIZE))])     //Take off a chunk for the text??
                 .separation( function(a,b) {
-                        return ( a.parent == b.parent ? 1 : 1); //All leaves equi-distant
+                        return ( a.parent === b.parent ? 1 : 1); //All leaves equi-distant
                     }
                 );
         }
@@ -193,10 +197,10 @@ Ext.define('CustomApp', {
             .enter().append("path")
             .attr("class", function(d) { return d.data.invisibleLink? "invisible--link" :  "local--link" ;})
             .attr("d", function(d) {
-                    return "M" + d.y + "," + d.x
-                        + "C" + (d.parent.y + 100) + "," + d.x
-                        + " " + (d.parent.y + 100) + "," + d.parent.x
-                        + " " + d.parent.y + "," + d.parent.x;
+                    return "M" + d.y + "," + d.x +
+                         "C" + (d.parent.y + 100) + "," + d.x +
+                         " " + (d.parent.y + 100) + "," + d.parent.x +
+                         " " + d.parent.y + "," + d.parent.x;
             })
             ;
         var node = g.selectAll(".node")
@@ -211,9 +215,9 @@ Ext.define('CustomApp', {
             var lClass = "dotOutline"; // Might want to use outline to indicate something later
 
             if ((d.parent !== null) && (d.data.record.data.Parent !== null)) {
-                if (d.data.record.get('PredecessorsAndSuccessors') && d.data.record.get('PredecessorsAndSuccessors').Count > 0) lClass = "gotDependencies";
+                if (d.data.record.get('PredecessorsAndSuccessors') && d.data.record.get('PredecessorsAndSuccessors').Count > 0) { lClass = "gotDependencies"; }
                 if (d.data.record.data.ObjectID){
-                    if (!d.data.record.get('State')) return "error--node";      //Not been set - which is an error in itself
+                    if (!d.data.record.get('State')) { return "error--node"; }      //Not been set - which is an error in itself
                     lClass +=  ' q' + ((d.data.record.get('State').OrderIndex-1) + '-' + gApp.numStates[gApp._getOrdFromModel(d.data.record.get('_type'))]); 
                     lClass += gApp._dataCheckForItem(d);
                 } else {
@@ -228,7 +232,6 @@ Ext.define('CustomApp', {
 
     node.append("text")
           .attr("dy", 3)
-//              .attr("visible", false)
           .attr('id', function(d) { return 'text' + gApp._getNodeId(d);})
           .attr("x", function(d) { return gApp._textXPos(d);})
           .attr("y", function(d) { return gApp._textYPos(d);})
@@ -263,7 +266,7 @@ Ext.define('CustomApp', {
                             }
                         },
                         failure: function(error) {
-                            debugger;
+                            console.log('Failed to fetch dependencies for ' + d.data.record.get('FormattedID'), error);
                         }
                     });
                 }
@@ -271,7 +274,6 @@ Ext.define('CustomApp', {
             return lClass;
           })
 
-            //              .style("text-anchor", "start" )
           .style("text-anchor",  function(d) { return gApp._textAnchor(d);})
           .text(function(d) {  
               var titleText = d.children?d.data.Name : d.data.Name + ' ' + (d.data.record && d.data.record.data.Name); 
@@ -291,13 +293,12 @@ Ext.define('CustomApp', {
     },
 
     _textAnchor: function(d){
-//        if (d.children && d.parent) return 'middle';
-        if (!d.children && d. parent) return 'start';
+        if (!d.children && d. parent) { return 'start'; }
         return 'end';
     },
 
-    _nodeMouseOut: function(node, index,array){
-        if (node.card) node.card.hide();
+    _nodeMouseOut: function(node){
+        if (node.card) { node.card.hide(); }
     },
 
     _nodeMouseOver: function(node,index,array) {
@@ -323,7 +324,7 @@ Ext.define('CustomApp', {
                             var xpos = array[index].getScreenCTM().e - gApp.MIN_COLUMN_WIDTH;
                             var ypos = array[index].getScreenCTM().f;
                             card.el.setLeftTop( (xpos - gApp.MIN_COLUMN_WIDTH) < 0 ? xpos + gApp.MIN_COLUMN_WIDTH : xpos - gApp.MIN_COLUMN_WIDTH, 
-                                (ypos + this.getSize().height)> gApp.getSize().height ? gApp.getSize().height - (this.getSize().height+20) : ypos)  //Tree is rotated
+                                (ypos + this.getSize().height)> gApp.getSize().height ? gApp.getSize().height - (this.getSize().height+20) : ypos);  //Tree is rotated
                         }
                     }
 
@@ -334,8 +335,8 @@ Ext.define('CustomApp', {
         }
     },
     
-    _nodePopup: function(node, index, array) {
-        var popover = Ext.create('Rally.ui.popover.DependenciesPopover',
+    _nodePopup: function(node) {
+        Ext.create('Rally.ui.popover.DependenciesPopover',
             {
                 record: node.data.record,
                 target: node.card.el
@@ -344,7 +345,7 @@ Ext.define('CustomApp', {
     },
 
     _nodeClick: function (node,index,array) {
-        if (!(node.data.record.data.ObjectID)) return; //Only exists on real items
+        if (!(node.data.record.data.ObjectID)) { return; }//Only exists on real items
         //Get ordinal (or something ) to indicate we are the lowest level, then use "UserStories" instead of "Children"
         if (event.shiftKey) { 
             gApp._nodePopup(node,index,array); 
@@ -380,11 +381,6 @@ Ext.define('CustomApp', {
                     itemId: 'leftCol',
                     width: 550,
                 },
-                // {
-                //     xtype: 'container',
-                //     itemId: 'middleCol',
-                //     width: 400
-                // },
                 {
                     xtype: 'container',
                     itemId: 'rightCol',
@@ -460,7 +456,7 @@ Ext.define('CustomApp', {
                                             text: 'RAG Status',
                                             dataIndex: 'Release',  //Just so that a sorter gets called on column ordering
                                             width: 60,
-                                            renderer: function (value, metaData, record, rowIdx, colIdx, store) {
+                                            renderer: function (value, metaData, record) {
                                                 var setColour = (record.get('c_RAIDType') === 'Risk') ?
                                                         me.RISKColour : me.AIDColour;
                                                 
@@ -527,7 +523,7 @@ Ext.define('CustomApp', {
                                         text: 'Timebox',
                                         dataIndex: 'Project',  //Just so that the renderer gets called
                                         minWidth: 80,
-                                        renderer: function (value, metaData, record, rowIdx, colIdx, store) {
+                                        renderer: function (value, metaData, record) {
                                             var retval = '';
                                                 if (record.hasField('Iteration')) {
                                                     retval = record.get('Iteration')?record.get('Iteration').Name:'NOT PLANNED';
@@ -572,7 +568,7 @@ Ext.define('CustomApp', {
                                     property: 'c_RAIDType',
                                     operator: '=',
                                     value: ''
-                                }
+                                };
                             break;
                         default:
                             break;
@@ -595,7 +591,7 @@ Ext.define('CustomApp', {
                                     property: 'c_RAIDType',
                                     operator: '!=',
                                     value: ''
-                                }
+                                };
                             break;
                         default:
                             break;
@@ -606,7 +602,7 @@ Ext.define('CustomApp', {
 
             RISKColour: function(severity, probability, state) {
                 if ( state === 'Closed' || state === 'Cancelled') {
-                    return 'RAID-blue';
+                    return  'RAID-blue'; 
                 }
 
                 if (severity === 'Exceptional') {
@@ -632,8 +628,8 @@ Ext.define('CustomApp', {
                 }
                 
                 var lClass = 'RAID-missing';
-                if (!severity) lClass += '-severity';
-                if (!probability) lClass += '-probability';
+                if (!severity) { lClass += '-severity'; }
+                if (!probability) { lClass += '-probability'; }
 
                 return lClass;
             },
@@ -671,7 +667,7 @@ Ext.define('CustomApp', {
     _onElementValid: function(rs) {
         //Add any useful selectors into this container ( which is inserted before the rootSurface )
         //Choose a point when all are 'ready' to jump off into the rest of the app
-        var hdrBox = this.insert (0,{
+        this.insert (0,{
             xtype: 'container',
             itemId: 'headerBox',
             layout: 'hbox',
@@ -704,7 +700,6 @@ Ext.define('CustomApp', {
     colourBoxSize: null,
 
     _addColourHelper: function() {
-        var hdrBox = gApp.down('#headerBox');
         var numColours = gApp._highestOrdinal() + 1;
         var modelList = gApp._getTypeList(0);  //Get from bottom to top
 
@@ -723,7 +718,7 @@ Ext.define('CustomApp', {
         svg.attr('class', 'rootSurface');
         svg.attr('preserveAspectRatio', 'none');
         svg.attr('viewBox', '0 0 ' + gApp.colourBoxSize[0] + ' ' + (gApp.colourBoxSize[1]+ gApp.NODE_CIRCLE_SIZE));
-        var colours = svg.append("g")    //New group for colours
+        svg.append("g")    //New group for colours
             .attr("id", "colourLegend")
             .attr("transform","translate(" + gApp.LEFT_MARGIN_SIZE + ",10)");
         //Add some legend specific sprites here
@@ -735,21 +730,16 @@ Ext.define('CustomApp', {
     },
 
     _addColourBox: function(modeltype, modelNum) {
-//        var colourBox = d3.select('#colourLegend' + modelNum);
         var colours = d3.select('#colourLegend');
-//        if (!colourBox) {
             colours.append("g")
                 .attr("id", "colourLegend" + modelNum)
                 .attr("transform","translate(" + (gApp.MIN_COLUMN_WIDTH*modelNum) + ",10)");
-//        }
         var colourBox = d3.select('#colourLegend' + modelNum);
-            var lCircle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
             colourBox.append("text")
                 .attr("dx", -gApp.NODE_CIRCLE_SIZE )
                 .attr("dy", -(gApp.NODE_CIRCLE_SIZE+2))
                 .attr("x",  0)
                 .attr("y", 0)
-//              .style("text-anchor", "start" )
                 .style("text-anchor",  'start')
                 .text(modeltype.Name);
 
@@ -779,7 +769,7 @@ Ext.define('CustomApp', {
                                     .attr("cx", 0)
                                     .attr("cy", idx * gApp.MIN_ROW_HEIGHT)    //Leave space for text of name
                                     .attr("r", gApp.NODE_CIRCLE_SIZE)
-                                    .attr("class", "q" + (state.get('OrderIndex')-1) + '-' + records.length)
+                                    .attr("class", "q" + (state.get('OrderIndex')-1) + '-' + records.length);
                                 colourBox.append("text")
                                     .attr("dx", gApp.NODE_CIRCLE_SIZE+2)
                                     .attr("dy", gApp.NODE_CIRCLE_SIZE/2)
@@ -787,11 +777,8 @@ Ext.define('CustomApp', {
                                     .attr("y",idx * gApp.MIN_ROW_HEIGHT)
                                     .attr("text-anchor", 'start')
                                     .text(state.get('Name'));
-                            })
+                            });
                         },
-                failure: function(error) {
-                    debugger;
-                }
             });
         
        colours.attr("visibility","hidden");    //Render, but mask it. Use "visible" to show again
@@ -825,7 +812,7 @@ Ext.define('CustomApp', {
         gApp._typeStore = ptype.store;
 
         var hdrBox = gApp.down('#headerBox');
-        var buttonTxt = "Colour Codes"
+        var buttonTxt = "Colour Codes";
         if (!gApp.down('#colourButton')) {
             hdrBox.add({
                 xtype: 'rallybutton',
@@ -840,7 +827,7 @@ Ext.define('CustomApp', {
                         d3.select("#colourLegend").attr("visibility","visible");
                         d3.select("#tree").attr("visibility", "hidden");
                     } else {
-                        this.setText(buttonTxt)
+                        this.setText(buttonTxt);
                         this.ticked = false;
                         d3.select("#colourLegend").attr("visibility","hidden");
                         d3.select("#tree").attr("visibility", "visible");
@@ -957,9 +944,8 @@ Ext.define('CustomApp', {
     },
 
     _getArtifacts: function(ptype) {
-    console.log('getArtifacts');
         //On re-entry remove all old stuff
-        if ( gApp._nodes) gApp._nodes = [];
+        if ( gApp._nodes) { gApp._nodes = []; }
         if (gApp._nodeTree) {
             d3.select("#tree").remove();
             gApp._nodeTree = null;
@@ -977,15 +963,14 @@ Ext.define('CustomApp', {
                 gApp._loadParents(dataArray, modelNumber);
             },
             failure: function(error) {
-                console.log("Failed to load a store");
+                console.log("Failed to load a store", error);
             }
         });
     },
 
     _loadParents: function(data, modelNumber) {
-    console.log('loadParents: ', data);
         var parentModelNumber = modelNumber + 1;
-        if ((data.length == 0)  ){
+        if ((data.length === 0)  ){
             //No more parents available, so branch off
             gApp._enterMainApp();
         }
@@ -1004,7 +989,7 @@ Ext.define('CustomApp', {
                         parentsToFind.push({'property': 'ObjectID', 'value': pObj});
                     }
                 });
-                parentsToFind = _.uniq(parentsToFind, function(p) { return p.value});
+                parentsToFind = _.uniq(parentsToFind, function(p) { return p.value;});
                 //Do those have any parents to look for
                 if (parentsToFind.length) {
                     gApp._loadStoreGlobal(gApp._getModelFromOrd(parentModelNumber), parentsToFind).then({
@@ -1013,7 +998,7 @@ Ext.define('CustomApp', {
                             gApp._loadParents(_.flatten(dArray), parentModelNumber);
                         },
                         failure: function(error) {
-                            console.log('Oops!');
+                            console.log('Oops!', error);
                         }
                     });
                 }
@@ -1161,7 +1146,7 @@ Ext.define('CustomApp', {
         });
     },
     _findParentNode: function(nodes, child){
-        if (child.record.data._ref === 'root') return null;
+        if (child.record.data._ref === 'root') { return null; }
         var parent = child.record.data.Parent;
         var pParent = null;
         if (parent ){
@@ -1188,8 +1173,9 @@ Ext.define('CustomApp', {
         var piModels = [];
         _.each(gApp._typeStore.data.items, function(type) {
             //Only push types above that selected
-            if (type.data.Ordinal >= lowestOrdinal )
+            if (type.data.Ordinal >= lowestOrdinal ) {
                 piModels.push({ 'type': type.data.TypePath.toLowerCase(), 'Name': type.data.Name, 'ref': type.data._ref});
+            }
         });
         return piModels;
     },
@@ -1199,18 +1185,18 @@ Ext.define('CustomApp', {
     },
     _getModelFromOrd: function(number){
         var model = null;
-        _.each(gApp._typeStore.data.items, function(type) { if (number == type.get('Ordinal')) { model = type; } });
+        _.each(gApp._typeStore.data.items, function(type) { if (number === type.get('Ordinal')) { model = type; } });
         return model && model.get('TypePath');
     },
 
     _getSelectedOrdinal: function() {
-        return gApp.down('#piType').lastSelection[0].get('Ordinal')
+        return gApp.down('#piType').lastSelection[0].get('Ordinal');
     },
 
     _getOrdFromModel: function(modelName){
         var model = null;
         _.each(gApp._typeStore.data.items, function(type) {
-            if (modelName == type.get('TypePath').toLowerCase()) {
+            if (modelName === type.get('TypePath').toLowerCase()) {
                 model = type.get('Ordinal');
             }
         });
@@ -1240,3 +1226,4 @@ Ext.define('CustomApp', {
         //API Docs: https://help.rallydev.com/apps/2.1/doc/
     },
 });
+}());
