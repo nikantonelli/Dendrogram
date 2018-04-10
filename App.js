@@ -547,7 +547,8 @@ Ext.define('CustomApp', {
 
                     var cfd = Ext.create('Rally.apps.CFDChart', {
                         record: this.record,
-                        container: this.down('#rightCol')
+                        container: this.down('#rightCol'),
+                        gApp: gApp
                     });
                     cfd.generateChart();
 

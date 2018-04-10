@@ -8,12 +8,13 @@ Ext.define("Rally.apps.CFDChart", {
     alias: 'widget.explorerCFDChart',
 
     config: {
-        app: undefined
+        gApp: undefined
     },
 
     constructor: function (config) {
         this.mergeConfig(config);
         this.callParent(arguments);
+        gApp = config.gApp;
     },
 
     requires: [
