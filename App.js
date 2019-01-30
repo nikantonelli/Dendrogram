@@ -188,6 +188,26 @@ Ext.define('CustomApp', {
         gApp.tree = tree;
         gApp._refreshTree();
     },
+    _getColourFromModel: function(record)
+    {
+        var theStore = null;
+
+        //We can find the original type that the state Store is from by looking into the value of the filters
+        _.each(gApp.stateStores, function(store) {
+            if (store.modelType.type == record.get('_type')){
+                theStore = store;
+            }
+        });
+        if (theStore) {
+            return theStore.findBy( function(theState) {    //Get the index of the store from the State Name
+                return theState.get('Name') == record.get('State').Name;
+            });
+        }
+        else {
+            return 0;
+        }
+    },
+
     _refreshTree: function(){
         var g = d3.select('#tree');
         var nodetree = gApp._nodeTree;
@@ -218,7 +238,8 @@ Ext.define('CustomApp', {
                 if (d.data.record.get('PredecessorsAndSuccessors') && d.data.record.get('PredecessorsAndSuccessors').Count > 0) { lClass = "gotDependencies"; }
                 if (d.data.record.data.ObjectID){
                     if (!d.data.record.get('State')) { return "error--node"; }      //Not been set - which is an error in itself
-                    lClass +=  ' q' + ((d.data.record.get('State').OrderIndex-1) + '-' + gApp.numStates[gApp._getOrdFromModel(d.data.record.get('_type'))]); 
+                    lClass +=  ' q' + gApp._getColourFromModel(d.data.record) + '-' + gApp.numStates[gApp._getOrdFromModel(d.data.record.get('_type'))]; 
+                    //lClass +=  ' q' + ((d.data.record.get('State').index) + '-' + gApp.numStates[gApp._getOrdFromModel(d.data.record.get('_type'))]); 
                     lClass += gApp._dataCheckForItem(d);
                 } else {
                     return d.data.error ? "error--node": "no--errors--done";
@@ -336,12 +357,17 @@ Ext.define('CustomApp', {
     },
     
     _nodePopup: function(node) {
-        Ext.create('Rally.ui.popover.DependenciesPopover',
-            {
-                record: node.data.record,
-                target: node.card.el
-            }
-        );
+        if (node.data.record.get('PredecessorsAndSuccessors')) {
+            Ext.create('Rally.ui.popover.DependenciesPopover',
+                {
+                    record: node.data.record,
+                    target: node.card.el
+                }
+            );
+        }
+        else {
+            Rally.ui.notify.Notifier.show({message: 'No dependencies available for "' + node.data.record.get('FormattedID') + ": " + node.data.record.get('Name') + '"'});
+        }
     },
 
     _nodeClick: function (node,index,array) {
@@ -698,6 +724,8 @@ Ext.define('CustomApp', {
         });
     },
     numStates: [],
+    stateStores: [],
+
     colourBoxSize: null,
 
     _addColourHelper: function() {
@@ -746,7 +774,10 @@ Ext.define('CustomApp', {
 
             //Now fetch all the values for the State field
             //And then add the colours
-            var typeStore = Ext.create('Rally.data.wsapi.Store',
+
+            //We use a state store here so that we can use the index into the store to draw stuff.
+            //We cannot use OrderIndex as there might be 'disabled' states that make the output have gaps!
+            var stateStore = Ext.create('Rally.data.wsapi.Store',
                 {
                     model: 'State',
                     filters: [{
@@ -758,28 +789,32 @@ Ext.define('CustomApp', {
                         value: true
                     }],
                     context: gApp.getContext().getDataContext(),
-                    fetch: true
+                    fetch: true,
+                    modelType: modeltype
                 }
             );
-            typeStore.load().then({ 
+            stateStore.load().then({ 
                 success: function(records){
-                        gApp.numStates[modelNum] = records.length;  //Save for drawing other circles
-                            _.each(records, function(state){
-                                var idx = state.get('OrderIndex');
-                                colourBox.append("circle")
-                                    .attr("cx", 0)
-                                    .attr("cy", idx * gApp.MIN_ROW_HEIGHT)    //Leave space for text of name
-                                    .attr("r", gApp.NODE_CIRCLE_SIZE)
-                                    .attr("class", "q" + (state.get('OrderIndex')-1) + '-' + records.length);
-                                colourBox.append("text")
-                                    .attr("dx", gApp.NODE_CIRCLE_SIZE+2)
-                                    .attr("dy", gApp.NODE_CIRCLE_SIZE/2)
-                                    .attr("x",0)
-                                    .attr("y",idx * gApp.MIN_ROW_HEIGHT)
-                                    .attr("text-anchor", 'start')
-                                    .text(state.get('Name'));
-                            });
-                        },
+                    gApp.numStates[modelNum] = _.max(_.pluck(records, function( record) { 
+                                                        return record.get('OrderIndex');}
+                                                ));
+                    //gApp.numStates[modelNum] = records.length;  //Save for drawing other circles
+                    _.each(records, function(state){
+                        colourBox.append("circle")
+                            .attr("cx", 0)
+                            .attr("cy", state.index * gApp.MIN_ROW_HEIGHT)    //Leave space for text of name
+                            .attr("r", gApp.NODE_CIRCLE_SIZE)
+                            .attr("class", "q" + (state.index) + '-' + gApp.numStates[modelNum]);
+                        colourBox.append("text")
+                            .attr("dx", gApp.NODE_CIRCLE_SIZE+2)
+                            .attr("dy", gApp.NODE_CIRCLE_SIZE/2)
+                            .attr("x",0)
+                            .attr("y",state.index * gApp.MIN_ROW_HEIGHT)
+                            .attr("text-anchor", 'start')
+                            .text(state.get('Name'));
+                    });
+                    gApp.stateStores.push(stateStore);
+                },
             });
         
        colours.attr("visibility","hidden");    //Render, but mask it. Use "visible" to show again
