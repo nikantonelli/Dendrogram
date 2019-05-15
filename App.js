@@ -9,7 +9,8 @@ Ext.define('CustomApp', {
         defaultSettings: {
             keepTypesAligned: true,
             showFilter: true,
-            hideArchived: true
+            hideArchived: true,
+            useColour: false
         }
     },
     getSettingsFields: function() {
@@ -36,6 +37,12 @@ Ext.define('CustomApp', {
             xtype: 'rallycheckboxfield',
             fieldLabel: 'Show Advanced filter',
             name: 'showFilter',
+            labelAlign: 'top'
+        },
+        {
+            xtype: 'rallycheckboxfield',
+            fieldLabel: 'Use DisplayColor',
+            name: 'useColour',
             labelAlign: 'top'
         }
         ];
@@ -194,13 +201,13 @@ Ext.define('CustomApp', {
 
         //We can find the original type that the state Store is from by looking into the value of the filters
         _.each(gApp.stateStores, function(store) {
-            if (store.modelType.type == record.get('_type')){
+            if (store.modelType.type === record.get('_type')){
                 theStore = store;
             }
         });
         if (theStore) {
             return theStore.findBy( function(theState) {    //Get the index of the store from the State Name
-                return theState.get('Name') == record.get('State').Name;
+                return theState.get('Name') === record.get('State').Name;
             });
         }
         else {
@@ -229,27 +236,41 @@ Ext.define('CustomApp', {
             .attr("transform", function(d) { return "translate(" + d.y + "," + d.x + ")"; });
 
         //We're going to set the colour of the dot depndent on some criteria (in this case only in-progress
-        node.append("circle")
-        .attr("r", gApp.NODE_CIRCLE_SIZE)
-        .attr("class", function (d) {   //Work out the individual dot colour
-            var lClass = "dotOutline"; // Might want to use outline to indicate something later
+        if ( gApp.getSetting('useColour')) {
+            node.append("circle")
+            .attr("r", gApp.NODE_CIRCLE_SIZE)
+            .attr("class", "dotOutline")  //Work out the individual dot colour
+            .style('fill', function(d) {
 
-            if ((d.parent !== null) && (d.data.record.data.Parent !== null)) {
-                if (d.data.record.get('PredecessorsAndSuccessors') && d.data.record.get('PredecessorsAndSuccessors').Count > 0) { lClass = "gotDependencies"; }
-                if (d.data.record.data.ObjectID){
-                    if (!d.data.record.get('State')) { return "error--node"; }      //Not been set - which is an error in itself
-                    lClass +=  ' q' + gApp._getColourFromModel(d.data.record) + '-' + gApp.numStates[gApp._getOrdFromModel(d.data.record.get('_type'))]; 
-                    //lClass +=  ' q' + ((d.data.record.get('State').index) + '-' + gApp.numStates[gApp._getOrdFromModel(d.data.record.get('_type'))]); 
-                    lClass += gApp._dataCheckForItem(d);
-                } else {
-                    return d.data.error ? "error--node": "no--errors--done";
+                return d.data.record.data.DisplayColor || "0xffffff";
+            })
+            .on("click", function(node, index, array) { gApp._nodeClick(node,index,array);})
+            .on("mouseover", function(node, index, array) { gApp._nodeMouseOver(node,index,array);})
+            .on("mouseout", function(node, index, array) { gApp._nodeMouseOut(node,index,array);});
+
+        } else {
+            node.append("circle")
+            .attr("r", gApp.NODE_CIRCLE_SIZE)
+            .attr("class", function (d) {   //Work out the individual dot colour
+                var lClass = "dotOutline"; // Might want to use outline to indicate something later
+
+                if ((d.parent !== null) && (d.data.record.data.Parent !== null)) {
+                    if (d.data.record.get('PredecessorsAndSuccessors') && d.data.record.get('PredecessorsAndSuccessors').Count > 0) { lClass = "gotDependencies"; }
+                    if (d.data.record.data.ObjectID){
+                        if (!d.data.record.get('State')) { return "error--node"; }      //Not been set - which is an error in itself
+                        lClass +=  ' q' + gApp._getColourFromModel(d.data.record) + '-' + gApp.numStates[gApp._getOrdFromModel(d.data.record.get('_type'))]; 
+                        //lClass +=  ' q' + ((d.data.record.get('State').index) + '-' + gApp.numStates[gApp._getOrdFromModel(d.data.record.get('_type'))]); 
+                        lClass += gApp._dataCheckForItem(d);
+                    } else {
+                        return d.data.error ? "error--node": "no--errors--done";
+                    }
                 }
-            }
-            return lClass;
-        })
-        .on("click", function(node, index, array) { gApp._nodeClick(node,index,array);})
-        .on("mouseover", function(node, index, array) { gApp._nodeMouseOver(node,index,array);})
-        .on("mouseout", function(node, index, array) { gApp._nodeMouseOut(node,index,array);});
+                return lClass;
+            })
+            .on("click", function(node, index, array) { gApp._nodeClick(node,index,array);})
+            .on("mouseover", function(node, index, array) { gApp._nodeMouseOver(node,index,array);})
+            .on("mouseout", function(node, index, array) { gApp._nodeMouseOut(node,index,array);});
+        }
 
     node.append("text")
           .attr("dy", 3)
@@ -848,30 +869,33 @@ Ext.define('CustomApp', {
         gApp._typeStore = ptype.store;
 
         var hdrBox = gApp.down('#headerBox');
-        var buttonTxt = "Colour Codes";
-        if (!gApp.down('#colourButton')) {
-            hdrBox.add({
-                xtype: 'rallybutton',
-                itemId: 'colourButton',
-                margin: '10 0 5 20',
-                ticked: false,
-                text: buttonTxt,
-                handler: function() {
-                    if (this.ticked === false) {
-                        this.setText('Return');
-                        this.ticked = true;
-                        d3.select("#colourLegend").attr("visibility","visible");
-                        d3.select("#tree").attr("visibility", "hidden");
-                    } else {
-                        this.setText(buttonTxt);
-                        this.ticked = false;
-                        d3.select("#colourLegend").attr("visibility","hidden");
-                        d3.select("#tree").attr("visibility", "visible");
+        if ( !gApp.getSetting('useColour')) {
+            var buttonTxt = "Colour Codes";
+            if (!gApp.down('#colourButton')) {
+                hdrBox.add({
+                    xtype: 'rallybutton',
+                    itemId: 'colourButton',
+                    margin: '10 0 5 20',
+                    ticked: false,
+                    text: buttonTxt,
+                    handler: function() {
+                        if (this.ticked === false) {
+                            this.setText('Return');
+                            this.ticked = true;
+                            d3.select("#colourLegend").attr("visibility","visible");
+                            d3.select("#tree").attr("visibility", "hidden");
+                        } else {
+                            this.setText(buttonTxt);
+                            this.ticked = false;
+                            d3.select("#colourLegend").attr("visibility","hidden");
+                            d3.select("#tree").attr("visibility", "visible");
+                        }
                     }
-                }
-            });
-            gApp._addColourHelper();
+                });
+            }
         }
+        //Nedd this regardless so as to set the svg size for us.
+        gApp._addColourHelper();
 
         if (!gApp.down('#infoButton')){
                 hdrBox.add( {
@@ -935,8 +959,8 @@ Ext.define('CustomApp', {
     _addFilterPanel: function() {
             var hdrBox = gApp.down('#headerBox');
             //Add a filter panel
-            var blackListFields = ['Successors', 'Predecessors', 'DisplayColor'],
-                whiteListFields = ['Milestones', 'Tags'];
+            var blackListFields = ['Successors', 'Predecessors'],
+                whiteListFields = ['Milestones', 'Tags', 'DisplayColor'];
             var modelNames = [];
             for ( var i = 0; i <= gApp._highestOrdinal(); i++){
                 modelNames.push(gApp._getModelFromOrd(i));
@@ -955,7 +979,7 @@ Ext.define('CustomApp', {
                     filterChildren: false,
                     inlineFilterPanelConfig: {
                         quickFilterPanelConfig: {
-                            defaultFields: ['ArtifactSearch', 'Owner'],
+                            defaultFields: ['DisplayColor', 'ArtifactSearch', 'Owner'],
                             addQuickFilterConfig: {
                                 blackListFields: blackListFields,
                                 whiteListFields: whiteListFields
@@ -992,6 +1016,7 @@ Ext.define('CustomApp', {
         var typeRecords = ptype.store.getRecords();
         gApp._loadStoreLocal( typeRecords[modelNumber].get('TypePath')).then({
             success: function(dataArray) {
+                console.log('Found ' + dataArray.length + ' lowest level artefacts');
                 if (dataArray.length >= gApp.WARN_STORE_MAX_RECORDS) {
                     Rally.ui.notify.Notifier.showWarning({message: 'Excessive limit of first level records. Narrow your scope '});
                 }
@@ -1031,7 +1056,9 @@ Ext.define('CustomApp', {
                     gApp._loadStoreGlobal(gApp._getModelFromOrd(parentModelNumber), parentsToFind).then({
                         success: function (dArray) {
                             // After multiple fetches, we need to reduce down to a single level of array nesting
-                            gApp._loadParents(_.flatten(dArray), parentModelNumber);
+                            var artefacts = _.flatten(dArray);
+                            console.log('Found ' + artefacts.length + ' artefacts of type ' + gApp._getModelFromOrd(parentModelNumber));
+                            gApp._loadParents(artefacts, parentModelNumber);
                         },
                         failure: function(error) {
                             console.log('Oops!', error);
