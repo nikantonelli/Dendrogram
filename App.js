@@ -88,6 +88,7 @@ Ext.define('CustomApp', {
                 'Release',
                 'Iteration',
                 'Milestones',
+                'InvestmentCategory',
                 //Customer specific after here. Delete as appropriate
                 'c_ProjectIDOBN',
                 'c_QRWP',
@@ -101,7 +102,7 @@ Ext.define('CustomApp', {
             [
                 'Name',
                 'Owner',
-                'PreliminaryEstimate',
+                'InvestmentCategory',
                 'Parent',
                 'Project',
                 'PercentDoneByStoryCount',
