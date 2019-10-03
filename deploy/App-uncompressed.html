@@ -3,7 +3,7 @@
 <head>
     <title>My Inventory</title>
 
-    <script type="text/javascript" src="/apps/2.1/sdk-debug.js"></script>
+    <script type="text/javascript" src="/apps/2.1/sdk.js"></script>
 
     <script type="text/javascript">
         Rally.onReady(function () {
@@ -328,7 +328,7 @@ Ext.define('CustomApp', {
 
           .style("text-anchor",  function(d) { return gApp._textAnchor(d);})
           .text(function(d) {  
-              var titleText = d.children?d.data.Name : d.data.Name + ' ' + (d.data.record && d.data.record.data.Name); 
+              var titleText = d.data.record ? d.data.record.data.Name : ''; 
               if ((d.data.record.data._ref !== 'root') && gApp.getSetting('showExtraText')) {
                   var prelimName = d.data.record.get('PreliminaryEstimate') ? d.data.record.get('PreliminaryEstimate').Name : 'Unsized!';
                   titleText += ' (' + d.data.record.get('Project').Name + ' : ' + prelimName + ')';
@@ -18225,6 +18225,7 @@ Ext.define("Rally.apps.charts.rpm.cfd.CumulativeFlowCalculator", {
 }
 .dotOutline {
   stroke: #000;
+  fill: #fff;
   stroke-width: 2px;
 }
 .gotDependencies {

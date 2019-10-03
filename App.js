@@ -319,7 +319,7 @@ Ext.define('CustomApp', {
 
           .style("text-anchor",  function(d) { return gApp._textAnchor(d);})
           .text(function(d) {  
-              var titleText = d.children?d.data.Name : d.data.Name + ' ' + (d.data.record && d.data.record.data.Name); 
+              var titleText = d.data.record ? d.data.record.data.Name : ''; 
               if ((d.data.record.data._ref !== 'root') && gApp.getSetting('showExtraText')) {
                   var prelimName = d.data.record.get('PreliminaryEstimate') ? d.data.record.get('PreliminaryEstimate').Name : 'Unsized!';
                   titleText += ' (' + d.data.record.get('Project').Name + ' : ' + prelimName + ')';
