@@ -5,12 +5,14 @@
 Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
+    settingsScope: 'app',
     config: {
         defaultSettings: {
             keepTypesAligned: true,
             showFilter: true,
             hideArchived: true,
-            useColour: false
+            useDisplayColour: false,
+            startWithStories: true
         }
     },
     getSettingsFields: function() {
@@ -42,7 +44,13 @@ Ext.define('CustomApp', {
         {
             xtype: 'rallycheckboxfield',
             fieldLabel: 'Use DisplayColor',
-            name: 'useColour',
+            name: 'useDisplayColour',
+            labelAlign: 'top'
+        },
+        {
+            xtype: 'rallycheckboxfield',
+            fieldLabel: 'Use Stories',
+            name: 'startWithStories',
             labelAlign: 'top'
         }
         ];
@@ -81,6 +89,7 @@ Ext.define('CustomApp', {
                 'Description',
                 'Notes',
                 'Predecessors',
+                'PortfolioItem',
                 'Successors',
                 'OrderIndex',   //Used to get the State field order index
                 'PortfolioItemType',                
@@ -156,8 +165,7 @@ Ext.define('CustomApp', {
         var treeboxHeight = (nodetree.leaves().length +1) * gApp.MIN_ROW_HEIGHT;
 
         var current = gApp.colourBoxSize;
-        var viewBoxSize = [columnWidth*numColumns < current[0]?current[0]:columnWidth*numColumns, 
-                treeboxHeight< current[1]? current[1]: treeboxHeight];
+        var viewBoxSize = [this.getSize().width, treeboxHeight< current[1]? current[1]: treeboxHeight];
 
         //Make surface the size available in the viewport (minus the selectors and margins)
         var rs = this.down('#rootSurface');
@@ -237,7 +245,7 @@ Ext.define('CustomApp', {
             .attr("transform", function(d) { return "translate(" + d.y + "," + d.x + ")"; });
 
         //We're going to set the colour of the dot depndent on some criteria (in this case only in-progress
-        if ( gApp.getSetting('useColour')) {
+        if ( gApp.getSetting('useDisplayColour')) {
             node.append("circle")
             .attr("r", gApp.NODE_CIRCLE_SIZE)
             .attr("class", "dotOutline")  //Work out the individual dot colour
@@ -319,7 +327,8 @@ Ext.define('CustomApp', {
 
           .style("text-anchor",  function(d) { return gApp._textAnchor(d);})
           .text(function(d) {  
-              var titleText = d.data.record ? d.data.record.data.Name : ''; 
+              var nodeid = (d.data.record && d.data.record.data.FormattedID) || '';
+              var titleText = d.data.record ? (nodeid + ': ' + d.data.record.data.Name) : ''; 
               if ((d.data.record.data._ref !== 'root') && gApp.getSetting('showExtraText')) {
                   var prelimName = d.data.record.get('PreliminaryEstimate') ? d.data.record.get('PreliminaryEstimate').Name : 'Unsized!';
                   titleText += ' (' + d.data.record.get('Project').Name + ' : ' + prelimName + ')';
@@ -716,34 +725,42 @@ Ext.define('CustomApp', {
     _onElementValid: function(rs) {
         //Add any useful selectors into this container ( which is inserted before the rootSurface )
         //Choose a point when all are 'ready' to jump off into the rest of the app
-        this.insert (0,{
-            xtype: 'container',
-            itemId: 'headerBox',
-            layout: 'hbox',
-            items: [
-                {
-                    xtype: 'container',
-                    itemId: 'filterBox'
-                },
-                {
-                    xtype:  'rallyportfolioitemtypecombobox',
-                    itemId: 'piType',
-                    fieldLabel: 'Choose Lowest Portfolio Type :',
-                    labelWidth: 100,
-                    margin: '5 0 5 20',
-                    defaultSelectionPosition: 'first',
-                    storeConfig: {
-                        sorters: {
-                            property: 'Ordinal',
-                            direction: 'ASC'
+
+        var pitype =  Ext.create('Ext.container.Container',
+            {
+                itemId: 'headerBox',
+                layout: 'hbox',
+                items: [
+                    {
+                        xtype: 'container',
+                        itemId: 'filterBox'
+                    },
+                    {
+                        xtype:  'rallyportfolioitemtypecombobox',
+                        itemId: 'piType',
+                        fieldLabel: 'Choose Lowest Portfolio Type :',
+                        labelWidth: 100,
+                        margin: '5 0 5 20',
+                        defaultSelectionPosition: 'first',
+                        storeConfig: {
+                            sorters: {
+                                property: 'Ordinal',
+                                direction: 'ASC'
+                            }
+                        },
+                        listeners: {
+                            select: function() { 
+                                if (gApp.getSetting('startWithStories') === true){
+                                    this.hide();
+                                }
+                                 gApp._kickOff();}    //Jump off here to add portfolio size selector
                         }
                     },
-                    listeners: {
-                        select: function() { gApp._kickOff();}    //Jump off here to add portfolio size selector
-                    }
-                },
-            ]
-        });
+                ]
+            });
+        
+        this.insert (0, pitype);
+        
     },
     numStates: [],
     stateStores: [],
@@ -751,7 +768,7 @@ Ext.define('CustomApp', {
     colourBoxSize: null,
 
     _addColourHelper: function() {
-        var numColours = gApp._highestOrdinal() + 1;
+        var numColours = gApp._highestOrdinal();
         var modelList = gApp._getTypeList(0);  //Get from bottom to top
 
         //Get the SVG surface and add a new group
@@ -870,7 +887,7 @@ Ext.define('CustomApp', {
         gApp._typeStore = ptype.store;
 
         var hdrBox = gApp.down('#headerBox');
-        if ( !gApp.getSetting('useColour')) {
+        if ( !gApp.getSetting('useDisplayColour')) {
             var buttonTxt = "Colour Codes";
             if (!gApp.down('#colourButton')) {
                 hdrBox.add({
@@ -890,6 +907,13 @@ Ext.define('CustomApp', {
                             this.ticked = false;
                             d3.select("#colourLegend").attr("visibility","hidden");
                             d3.select("#tree").attr("visibility", "visible");
+                        }
+                    },
+                    listeners: {
+                        afterrender: function() {
+                            if (gApp.getSetting('useDisplayColour') === true) {
+                                this.hide();
+                            }
                         }
                     }
                 });
@@ -954,7 +978,7 @@ Ext.define('CustomApp', {
             gApp._addFilterPanel();
         }
 
-        gApp._getArtifacts(ptype);
+        gApp._getArtifacts();
     },
 
     _addFilterPanel: function() {
@@ -962,7 +986,7 @@ Ext.define('CustomApp', {
             //Add a filter panel
             var blackListFields = ['Successors', 'Predecessors'],
                 whiteListFields = ['Milestones', 'Tags', 'DisplayColor'];
-            var modelNames = [];
+            var modelNames = ['HierarchicalRequirement'];
             for ( var i = 0; i <= gApp._highestOrdinal(); i++){
                 modelNames.push(gApp._getModelFromOrd(i));
             }
@@ -1004,7 +1028,7 @@ Ext.define('CustomApp', {
             });
     },
 
-    _getArtifacts: function(ptype) {
+    _getArtifacts: function() {
         //On re-entry remove all old stuff
         if ( gApp._nodes) { gApp._nodes = []; }
         if (gApp._nodeTree) {
@@ -1012,10 +1036,16 @@ Ext.define('CustomApp', {
             gApp._nodeTree = null;
         }
         //Starting with lowest selected by the combobox, go up
-        var typeRecord = ptype.getRecord();
-        var modelNumber = typeRecord.get('Ordinal');
-        var typeRecords = ptype.store.getRecords();
-        gApp._loadStoreLocal( typeRecords[modelNumber].get('TypePath')).then({
+        var startType = 'User Story';
+        var modelNumber = -1;
+
+        if (gApp.getSetting('startWithStories') !== true) {
+            var ptype = gApp.down('#piType');
+            modelNumber = ptype.getRecord().get('Ordinal');
+            startType = ptype.store.getRecords()[modelNumber].get('TypePath');
+        }
+
+        gApp._loadStoreLocal( startType).then({
             success: function(dataArray) {
                 console.log('Found ' + dataArray.length + ' lowest level artefacts');
                 if (dataArray.length >= gApp.WARN_STORE_MAX_RECORDS) {
@@ -1025,6 +1055,7 @@ Ext.define('CustomApp', {
                 gApp._loadParents(dataArray, modelNumber);
             },
             failure: function(error) {
+                debugger;
                 console.log("Failed to load a store", error);
             }
         });
@@ -1046,7 +1077,7 @@ Ext.define('CustomApp', {
                 //Now create list for parents and find those
                 var parentsToFind = [];
                 _.each(data, function(record) {
-                    var pObj = record.get('Parent') && record.get('Parent').ObjectID;
+                    var pObj = record.isPortfolioItem()? (record.get('Parent') && record.get('Parent').ObjectID) : (record.get('PortfolioItem') && record.get('PortfolioItem').ObjectID);
                     if (pObj) {
                         parentsToFind.push({'property': 'ObjectID', 'value': pObj});
                     }
@@ -1058,7 +1089,7 @@ Ext.define('CustomApp', {
                         success: function (dArray) {
                             // After multiple fetches, we need to reduce down to a single level of array nesting
                             var artefacts = _.flatten(dArray);
-                            console.log('Found ' + artefacts.length + ' artefacts of type ' + gApp._getModelFromOrd(parentModelNumber));
+                            console.log('Found ' + artefacts.length + ' artefacts of type ' + parentModelNumber);
                             gApp._loadParents(artefacts, parentModelNumber);
                         },
                         failure: function(error) {
@@ -1078,7 +1109,7 @@ Ext.define('CustomApp', {
         var storeConfig =
             {
                 model: modelName,
-                limit: 20000,
+                limit: Infinity,
                 fetch:  gApp.STORE_FETCH_FIELD_LIST,
                 filters: [],
                 sorters: [
@@ -1093,7 +1124,7 @@ Ext.define('CustomApp', {
             storeConfig.models = gApp._filterInfo.types;
         }
 
-        if (gApp.getSetting('hideArchived')) {
+        if ((gApp.getSetting('startWithStories') === false) && gApp.getSetting('hideArchived')) {
             storeConfig.filters.push({
                 property: 'Archived',
                 operator: '=',
@@ -1158,11 +1189,16 @@ Ext.define('CustomApp', {
             'local':true
         });
         //Now push some entries to handle "parent-less" artefacts. This should create a 'tree' branch of parentless things
-        _.each(gApp._getTypeList(gApp._getSelectedOrdinal()+1), function(typedef) {
+        var startOrdinal = gApp._getSelectedOrdinal()+1;
+
+        if (gApp.getSetting('startWithStories')){
+            startOrdinal = 0;
+        }
+        _.each(gApp._getTypeList(startOrdinal), function(typedef) {
             nodes.push( { 'Name' : 'Unknown ' + typedef.Name,
                 'record': {
                     'data': {
-                            'FormattedID' : 'Parent Not Set',
+                            'FormattedID' : '',
                             'Name': 'Missing Parent (' + typedef.Name + ')',
                             '_ref': '/' + typedef.type + '/null',
                             '_type': typedef.type,
@@ -1176,16 +1212,17 @@ Ext.define('CustomApp', {
         });
         return nodes;
     },
-    _findNode: function(nodes, record) {
+
+    _findNode: function(nodes, recordData) {
         var returnNode = null;
             _.each(nodes, function(node) {
-                if ((node.record && node.record.data._ref) === record._ref){
+                if (node.record && (node.record.data._ref === recordData._ref)){
                      returnNode = node;
                 }
             });
         return returnNode;
-
     },
+    
     _findParentType: function(record) {
         //The only source of truth for the hierachy of types is the typeStore using 'Ordinal'
         var ord = null;
@@ -1210,8 +1247,21 @@ Ext.define('CustomApp', {
         });
     },
     _findParentNode: function(nodes, child){
-        if (child.record.data._ref === 'root') { return null; }
-        var parent = child.record.data.Parent;
+        if (child.record.data._ref === 'root') { return null;}
+
+        //We need to locate based on the type of artefact passed in.
+        var parent = null;
+        
+        if (child.record.data._type.toLowerCase().includes('portfolioitem/')) {
+            parent = child.record.data.Parent;
+        }
+        else if (child.record.data._type.toLowerCase() === 'hierarchicalrequirement') {
+            parent = child.record.data.PortfolioItem;
+        }
+        else if (child.record.data._type.toLowerCase() === 'defect') {
+            parent = child.record.data.Requirement;
+        }
+
         var pParent = null;
         if (parent ){
             //Check if parent already in the node list. If so, make this one a child of that one
@@ -1231,7 +1281,8 @@ Ext.define('CustomApp', {
         //If the record is a type at the top level, then we must return something to indicate 'root'
         return pParent?pParent: gApp._findNodeById(nodes, 'root');
     },
-        //Routines to manipulate the types
+
+    //Routines to manipulate the types
 
      _getTypeList: function(lowestOrdinal) {
         var piModels = [];
@@ -1267,18 +1318,25 @@ Ext.define('CustomApp', {
         return model;
     },
 
+    _getNodeTreeRecordId: function(record) {
+        return record.data._ref;
+    },
+
+    _stratifyNodeTree: function(nodes) {
+        return d3.stratify()
+        .id( function(d) {
+            var retval = (d.record && gApp._getNodeTreeRecordId(d.record)) || null; //No record is an error in the code, try to barf somewhere if that is the case
+            return retval;
+        })
+        .parentId( function(d) {
+            var pParent = gApp._findParentNode(nodes, d);
+            return (pParent && pParent.record && gApp._getNodeTreeRecordId(pParent.record)); })
+        (nodes);
+    },
+
     _createTree: function (nodes) {
         //Try to use d3.stratify to create nodet
-        var nodetree = d3.stratify()
-                    .id( function(d) {
-                        var retval = (d.record && d.record.data._ref) || null; //No record is an error in the code, try to barf somewhere if that is the case
-                        return retval;
-                    })
-                    .parentId( function(d) {
-                        var pParent = gApp._findParentNode(nodes, d);
-                        return (pParent && pParent.record && pParent.record.data._ref); })
-                    (nodes);
-        return nodetree;
+        return gApp._stratifyNodeTree(nodes);
     },
 
     _getNodeId: function(d){
